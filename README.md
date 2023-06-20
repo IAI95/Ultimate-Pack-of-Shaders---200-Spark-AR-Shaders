@@ -24,11 +24,11 @@ To use any of these shaders, just drag them into a new or existing project, then
 
 ![Screenshot_1](https://github.com/IAI95/Ultimate-Pack-of-Shaders---200-Spark-AR-Shaders/assets/80382116/6db7284d-d6d1-44b3-9768-aeaee1888191)
 
-if you've seen any shaders requare a "tex#" you need to open the Presets folder that i provided in the zip file and find the exact tex number picture and drag it in your assets panel and connect it with the shader. (Don't forget to put the U & V tiling mode to "Repeat")
+if you've seen any shaders require a "tex#" you need to open the Presets folder that i provided in the zip file and find the exact tex number picture and drag it in your assets panel and connect it with the shader. (Don't forget to put the U & V tiling mode to "Repeat")
 
 ![Screenshot_2](https://github.com/IAI95/Ultimate-Pack-of-Shaders---200-Spark-AR-Shaders/assets/80382116/0ebc287e-46e5-479c-901c-a4bbef728bb5)
 
-There are few other shaders that are not single files but they are 2 or 3 or 4 buffers that work together. in this case you have an extra step to put them together. first there is BufferA that has to be connected to a shader render pass and then to a delay frame. you gonna have to do the same process for the rest of the Buffers. then right click on the delay frame patch of every buffer and make reciever for each. those recievers should be connected to anywhere that is needed. finally we have the "Image" shader wich comes last and must be connected to your material.
+There are few other shaders that are not single files but they are 2 or 3 or 4 buffers that work together. in this case you have an extra step to put them together. first there is BufferA that has to be connected to a shader render pass and then to a delay frame. you gonna have to do the same process for the rest of the Buffers. then right click on the delay frame patch of every buffer and make reciever for each. those recievers should be connected to anywhere that is needed. finally we have the "Image" shader which comes last and must be connected to your material.
 
 ![Screenshot_3](https://github.com/IAI95/Ultimate-Pack-of-Shaders---200-Spark-AR-Shaders/assets/80382116/532640e4-e739-498e-a543-232bc2b1dbff)
 
