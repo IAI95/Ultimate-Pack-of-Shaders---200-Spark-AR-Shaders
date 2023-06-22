@@ -1,0 +1,70 @@
+precision highp float;
+
+float random (vec2 noise)
+{
+    //--- Noise: Low Static (X axis) ---
+    //return fract(sin(dot(noise.yx,vec2(0.000128,0.233)))*804818480.159265359);
+    
+    //--- Noise: Low Static (Y axis) ---
+    //return fract(sin(dot(noise.xy,vec2(0.000128,0.233)))*804818480.159265359);
+    
+  	//--- Noise: Low Static Scanlines (X axis) ---
+    //return fract(sin(dot(noise.xy,vec2(98.233,0.0001)))*925895933.14159265359);
+    
+   	//--- Noise: Low Static Scanlines (Y axis) ---
+    //return fract(sin(dot(noise.xy,vec2(0.0001,98.233)))*925895933.14159265359);
+    
+    //--- Noise: High Static Scanlines (X axis) ---
+    //return fract(sin(dot(noise.xy,vec2(0.0001,98.233)))*12073103.285);
+    
+    //--- Noise: High Static Scanlines (Y axis) ---
+    //return fract(sin(dot(noise.xy,vec2(98.233,0.0001)))*12073103.285);
+    
+    //--- Noise: Full Static ---
+    return fract(sin(dot(noise.xy,vec2(10.998,98.233)))*12433.14159265359);
+}
+
+/*
+float random_colour (float noise)
+{
+    return fract(sin(noise));   
+}
+*/
+
+// @param[default=10.0, min=0.0, max=20.0] Speed
+
+void mainImage( in float Speed, in std::Texture2d Texture, out vec4 Return )
+{
+
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+    vec2 uv = fragCoord.xy / iResolution.xy;
+    vec2 uv2 = fract(fragCoord.xy/iResolution.xy*fract(sin(iTime*Speed)));
+
+    float maxStrength = 0.5;
+    float minStrength = 0.125;
+    
+    //--- Strength animate ---
+    maxStrength = clamp(sin(iTime/2.0),minStrength,maxStrength);
+    //-----------------------
+    
+    //--- Black and white ---
+    vec3 colour = vec3(random(uv2.xy))*maxStrength;
+    //-----------------------
+        
+    /*
+    //--- Colour ---
+    colour.r *= random_colour(sin(iTime*Speed));
+    colour.g *= random_colour(cos(iTime*Speed));
+    colour.b *= random_colour(tan(iTime*Speed));
+    //--------------
+    */
+    
+    //--- Background ---
+    vec3 background = vec3(Texture.sample(uv));
+    //--------------
+    
+    Return = vec4(background-colour,1.0);
+}

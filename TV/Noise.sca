@@ -1,0 +1,27 @@
+precision highp float;
+
+float rand(vec2 co)
+{
+ vec2 resolution;
+ float time;
+float iTime = std::getTime();
+ float a = 12.9898;
+ float b = 78.233;
+ float c = 43758.5453;
+ float dt= dot(co.xy ,vec2(a,b));
+ float sn= mod(dt,3.14159);
+return fract((sin(sn) * c)+iTime*(6.0));
+}
+
+
+void mainImage( out vec4 Return )
+{
+
+vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+vec2 iResolution = std::getRenderTargetSize();
+
+vec2 uv= fragCoord.xy / iResolution.xy;
+vec2 st= vec2(uv.x, uv.y );
+
+Return = vec4(rand(st),rand(st+1.0),rand(st+2.0),1.0);
+}

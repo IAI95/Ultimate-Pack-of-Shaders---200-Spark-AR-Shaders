@@ -1,0 +1,39 @@
+precision highp float;
+
+void mainImage( in std::Texture2d Texture, out vec4 Return )
+{
+
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+
+    // Normalized pixel coordinates (from 0 to 1)
+    vec2 uv = fragCoord/iResolution.xy;
+    
+    // Hint, it's a few lines of code, and makes use of a tan function :)
+    vec2 warpedUv = uv;
+    float yPos = (uv.y - 0.5)*2.0;
+    
+    float t = tan(iTime / 2.0) + 2.0;
+    vec2 offset1 = vec2(0.0);
+    vec2 offset2 = vec2(0.0);
+    vec2 offset3 = vec2(0.0);
+    
+    if (yPos < t + 0.1 && yPos > t - 0.1)
+    {
+        offset1 = vec2(0.01*cos(iTime * 2.0 * yPos), 0.01*sin(iTime * 2.0 * yPos));
+        offset2 = vec2(0.01*cos(iTime * 4.0 * yPos), 0.01*sin(iTime * 4.0 * yPos));
+        offset3 = vec2(0.01*cos(iTime * 6.0 * yPos), 0.01*sin(iTime * 6.0 * yPos));
+    }
+
+    float r = Texture.sample(warpedUv + offset1).r;
+    float g = Texture.sample(warpedUv + offset2).g;
+    float b = Texture.sample(warpedUv + offset3).b;
+                          
+
+    vec3 col = vec3(r, g, b);
+
+    // Output to screen
+    Return = vec4(col,1.0);
+}

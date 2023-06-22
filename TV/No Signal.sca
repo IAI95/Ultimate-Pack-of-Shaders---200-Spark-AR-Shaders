@@ -1,0 +1,72 @@
+precision highp float;
+
+void mainImage( out vec4 Return )
+{
+
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+    // First time working with shader
+    // Mostly I understand that mainImage is a loop of every pixel on the screen
+    // Something so simple that can be extremely complex
+    
+    // It's important to normalize the resolution
+    // because it's easier to work with 0-1 than the screen resolution e.g 640/360
+    vec2 uv = 1.0-(1.0-fragCoord)/(1.0-iResolution.xy);
+    
+    // TV screen
+    // 7 vertical rectangle (white, yellow, light blue, green, pink, red blue)
+    // 7 vertical smaller rectangle (blue, black, pink, black, light blue, black, white)
+    // 6 square (dark blue, white, purple, black, gradiant black to gray, black)
+    
+    // Default black pixel
+    vec3 col = vec3(0,0,0);
+    
+    float l = 1.0 / 7.0; // Since the resolution was normalized screen is equal to 1 and we divide it by 7
+    
+    // Draw 7 rectangle different color per segment
+    if (uv.y > 0.35) {
+        if (uv.x > l*0.0 && uv.x < l*1.0) col = vec3(1, 1, 1); // white
+        if (uv.x > l*1.0 && uv.x < l*2.0) col = vec3(1, 1, 0); // yellow
+        if (uv.x > l*2.0 && uv.x < l*3.0) col = vec3(0, 1, 1); // light blue
+        if (uv.x > l*3.0 && uv.x < l*4.0) col = vec3(0, 1, 0); // green
+        if (uv.x > l*4.0 && uv.x < l*5.0) col = vec3(1, 0, 1); // purple
+        if (uv.x > l*5.0 && uv.x < l*6.0) col = vec3(1, 0, 0); // red
+        if (uv.x > l*6.0 && uv.x < l*7.0) col = vec3(0, 0, 1); // blue
+    }
+    
+    // Draw 7 smaller rectangle
+    if (uv.y > 0.25 && uv.y < 0.35) {
+     	if (uv.x > l*0.0 && uv.x < l*1.0) col = vec3(0, 0, 1); // blue
+        // if (uv.x < l*2.0) col = vec3(0, 0, 0); // black -- don't need it because background is black
+        if (uv.x > l*2.0 && uv.x < l*3.0) col = vec3(1, 0, 1); // pink
+        // if (uv.x > l*3.0 && uv.x < l*4.0) col = vec3(0, 0, 0); // black
+        if (uv.x > l*4.0 && uv.x < l*5.0) col = vec3(0, 1, 1); // light blue
+        // if (uv.x > l*5.0 && uv.x < l*6.0) col = vec3(0, 0, 0); // black
+        if (uv.x > l*6.0 && uv.x < l*7.0) col = vec3(1, 1, 1); // white
+    }
+    
+    float l2 = 1.0 / 6.0; // Same as earlier except we divide the screen by 6
+    // Draw 6 square
+    if (uv.y < 0.25) {
+    	if (uv.x > l2*0.0 && uv.x < l2*1.0) col = vec3(0, 0, 0.5); // dark blue
+    	if (uv.x > l2*1.0 && uv.x < l2*2.0) col = vec3(1, 1, 1); // white
+        if (uv.x > l2*2.0 && uv.x < l2*3.0) col = vec3(0.2, 0, 0.5); // dark purple
+        //if (uv.x > l2*3.0 && uv.x < l2*4.0) col = vec3(0, 0, 0); // black
+    	// Gradient box
+        if (uv.x > l2*4.0 && uv.x < l2*5.0) {
+            // We want to start the gradiant at black (left to right)
+            // If we only use uv.x it will start a grayish color
+            // So we subtract the position of the square to uv.x
+            float s = uv.x - l2*4.0;
+        	col = vec3(s); // Increment pixel position to get the gradient effect
+        }
+        //if (uv.x > l2*5.0 && uv.x < l2*6.0) col = vec3(0,0,0); // black
+    }
+    
+    
+    // Output color of the pixel with alpha 
+    // recommended to leave alpha channel at 1.0
+    Return = vec4(col,1.0);
+}
