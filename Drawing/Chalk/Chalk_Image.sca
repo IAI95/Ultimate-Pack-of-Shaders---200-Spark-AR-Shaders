@@ -1,0 +1,184 @@
+// created by florian berger (flockaroo) - 2020
+// License Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.
+
+// trying to resemle some chalk on blackboard hand drawing style
+
+precision highp float;
+
+#define PI2 6.28318530717959
+#define N(a) ((a).yx*vec2(1,-1))
+#define zoom 1.
+#define reflectPos (std::getRenderTargetSize()*(.2+.15*sin(std::getTime()+vec2(0,2.))))
+const vec3 paperTint=vec3(1,.85,.9)*.8;
+const float reflection = 0.5;
+const float reflectStrength = 0.3;
+const float reflectSize = 0.35;
+
+vec4 getRand(vec2 pos, std::Texture2d tex16)
+{
+    vec2 iResolution = std::getRenderTargetSize();
+
+    vec2 Res1 = iResolution;
+    return tex16.sample(pos/Res1/iResolution.y*1200.);
+}
+
+vec4 getCol(vec2 pos, std::Texture2d BufferA, float Bright)
+{
+    vec2 iResolution = std::getRenderTargetSize();
+
+    vec2 Res = iResolution;
+    vec2 Res0 = iResolution;
+
+    vec2 uv = pos/Res0;
+    return BufferA.sample(uv).zz00;
+
+    /*
+    pos = (pos - 0.5 * Res) * zoom + 0.5 * Res;
+    vec2 r0 = BufferA.sample(0.5 / Res).zw;
+    vec2 sc = mix(r0.y / Res0.y , r0.x / Res0.x , 0.5) / Res;    // compromise between "fit all" and "fit one"
+
+    vec2 uv = pos * sc + 0.5 * (r0 / Res0 - Res * sc);
+    uv = clamp(uv , 0.5 / Res0 , 1.0 - 0.5 / Res0);
+    return (1.0 - Bright * BufferA.sample(uv).zzzw);
+    */
+}
+
+vec2 getGrad(vec2 pos, float eps, std::Texture2d BufferA, float ContourStrength)
+{
+    vec2 iResolution = std::getRenderTargetSize();
+
+    vec2 Res = iResolution.xy;
+    vec2 Res0 = iResolution;
+
+    pos=(pos-.5*Res.xy)*zoom+.5*Res.xy;
+    vec2 r0 = BufferA.sample(.5/Res).zw;
+    vec2 sc = mix(r0.y/Res0.y,r0.x/Res0.x,.5)/Res;    // compromise between "fit all" and "fit one"
+    vec2 uv = pos*sc+.5*(r0/Res0-Res*sc);
+    uv = clamp(uv,.5/Res0,1.-.5/Res0);
+    return ContourStrength * BufferA.sample(uv).xy * r0/Res;
+}
+
+const float flicker=1.;
+const float flickerFreq=10.;
+
+float htPattern(vec2 pos, float phase, std::Texture2d tex16)
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    float iTime = std::getTime();
+
+    vec2 Res = iResolution.xy;
+    vec2 Res1 = iResolution;
+
+    float pat=0.;
+    float cnt=0.;
+    vec2 offs=vec2(.001,.1)*floor(iTime*flickerFreq)/10.*flicker;
+    float phaseOffs = 10.*getRand(floor(iTime*flickerFreq)*vec2(.01,.1), tex16).x*flicker;
+    vec2 gr=/*getGrad(floor(pos/13.)*13.,1.)+*/1.01*normalize(pos-.5*Res);
+    for(float ang=0.0;ang<PI2;ang+=PI2/4.3)
+    {
+        vec2 b=normalize(sin(vec2(0,PI2/4.) + ang + phase + phaseOffs + 0.6 )*vec2(.5,1.5));
+        vec2 uv=((pos.x-pos.y*pos.y*.0004)*b+(pos.y+pos.x*pos.x*.0004)*N(b))/Res1*vec2(7,.3)*.3;
+        pat += 0.5 * tex16.sample(uv*.25+offs).x;
+        pat += 1.0 * tex16.sample(uv+offs).x;
+        cnt += 1.5;
+    }
+    return pat/cnt; 
+}
+
+float halfTone(float val,vec2 pos, float phase, std::Texture2d tex16)
+{
+    return smoothstep(.6,1.4,val+htPattern(pos,phase, tex16));
+}
+
+// @param[default=10, min=2, max=24] SampNum
+// @param[default=5, min=1, max=5] AngleNum
+// @param[default=1.0, min=0.0, max=2.0] BlackFill
+// @param[default=0.0, min=0.0, max=2.0] OutlineOffs
+// @param[default=1.1, min=0.0, max=2.0] Bright
+// @param[default=1.0, min=0.0, max=2.0] ContourStrength
+
+void mainImage( in int AngleNum, in int SampNum, in float BlackFill, in float OutlineOffs, in float Bright, in float ContourStrength, in vec2 ScreenPan, in std::Texture2d BufferA, in std::Texture2d tex16, in std::Texture2d BufferB, out vec4 Return )
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+    vec2 Res = iResolution.xy;
+
+    vec2 pos = fragCoord+0.0*sin(iTime*1.*vec2(1,1.7))*iResolution.y/400.;
+    vec2 pos0=pos;
+    vec3 col = vec3(0);
+    vec3 col2 = vec3(0);
+    float sum=0.;
+  	vec2 g0 = getGrad(pos,1., BufferA, ContourStrength);
+  	float dang=PI2/float(AngleNum);
+    for(int i=0;i<AngleNum;i++)
+    {
+        float ang=dang*float(i)+.1;
+        vec2 v=sin(vec2(PI2/4.,0)+ang);
+        for(int j=0;j<SampNum;j++)
+        {
+            vec2 dpos  = v.yx*(vec2(1,-1)*float(j)*iResolution.y/25./float(SampNum)+OutlineOffs*Res.x/15.);
+            vec2 dpos2 = v.xy*(float(j*j)/float(SampNum*SampNum)*.3
+                               //*(length(100.*g0)) // higher/lower gradients get curved/hatched
+                               +.08)*iResolution.y/25.;
+	        vec2 g;
+            float fact=1.;
+            float fact2;
+
+            for(float s=-1.;s<=1.;s+=2.)
+            {
+                vec2 pos2=pos+1.0/zoom*(s*dpos+dpos2);
+                vec2 pos3=pos+1.0/zoom*(s*dpos+dpos2).yx*vec2(1,-1)*2.;
+                float ht=1.;
+            	g=getGrad(pos2,1., BufferA, ContourStrength)*ht;
+                g*=pow(getRand(pos2*.8*iResolution.y/1080., tex16).x*2.,4.*sqrt(iResolution.y/1200.));
+                
+            	float fact3=dot(g,v)-.5*abs(dot(g,v.yx*vec2(1,-1)))/**(1.-getVal(pos2))*/;
+            	fact2=dot(normalize(g+vec2(.0001)),v.yx*vec2(1,-1));
+             
+                fact3=clamp(fact3,0.,0.05);
+                fact2=abs(fact2);
+                
+                fact3*=1.-1.*float(j)/float(SampNum);
+                fact*=fact3;
+            	col += .3*fact3;
+             	sum+=fact2;
+            }
+          	col += 2.*pow(fact,.5);
+        }
+    }
+    col/=float(SampNum*AngleNum)*.75/sqrt(iResolution.y);
+    col2/=sum;
+    col=1.-col*1.2;
+    col*=col*col;
+    
+
+    vec2 s=sin(pos.xy*.1/sqrt(iResolution.y/400.));
+    float r=length(pos-iResolution.xy*.5)/iResolution.y;
+    float vign=1.-r*r*r;
+    vec4 c = getCol(pos, BufferA, Bright).xyzw;
+    Bright = dot(getCol(pos, BufferA, Bright).xyz,vec3(.3333));
+    float blackTone=halfTone(Bright*1.5+.25 , (pos0-Res*.5)*zoom , floor(sqrt(Bright)*8.)/8.*2.7 , tex16);
+
+    blackTone = mix(1., blackTone, BlackFill);
+    float refl=clamp(pow((col.x*(blackTone)),1.),0.,1.);
+    vec3 col3 = paperTint;
+    col3 *= vec3(col.x) * blackTone;
+    col3 += 0.1* getRand(pos*.7, tex16).xxx;
+    col3 *= (1.0 - 0.65 * BufferB.sample(fragCoord/iResolution.xy).xyz);
+    
+	Return = vec4(col3 * 0.9 + 0.2 * getRand(pos * 0.7, tex16).xyz - 0.2 * getRand(pos * 0.7 - 0.6, tex16).xyz, 1.0);
+    
+	float reflEnv=clamp((sin(fragCoord.x/iResolution.x*7.+2.5+1.7*iTime))*(fragCoord.y/iResolution.y),0.,1.);
+	vec2 reflp=reflectPos*vec2(1,-1)+vec2(0,iResolution.y); 
+	if(ScreenPan.x>0.5) reflp=ScreenPan.xy;
+	reflEnv = exp(-pow(length(reflp-fragCoord)/iResolution.x/reflectSize,2.));
+
+	Return.xyz = 1.0 -Return.xyz;
+
+	Return.xyz += refl * vec3(.8,.9,1.) * 1.1 * reflEnv * reflectStrength;
+
+	Return.w = mix(1.0, 1.0 -min(min(Return.x, Return.y), Return.z), 0.0);
+}
+

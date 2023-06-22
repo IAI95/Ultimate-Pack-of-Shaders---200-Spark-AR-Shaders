@@ -1,0 +1,14 @@
+void mainImage( in std::Texture2d BufferA, in std::Texture2d BufferB, out vec4 Return )
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+	vec2 uv = fragCoord.xy / iResolution.xy;
+    vec4 texa = BufferA.sample(uv);
+    vec4 texb = BufferB.sample(uv);
+    //vec3 finalrgb = texa.rgb;
+	//vec3 finalrgb = 1.0 - texb.rgb;
+    vec3 finalrgb = min(texa.rgb, texb.rgb);
+	Return = vec4(finalrgb,1.0);
+}

@@ -1,0 +1,71 @@
+// created by florian berger (flockaroo) - 2018
+// License Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.
+
+// aquarelle with pencil predraw
+// derived from shaderoo version: https://www.shaderoo.org/?shader=1Fh9sQ
+// ...basically just simplified pencil-predraw because no geometry possible here
+
+// final mixing and some paper-ish noise
+
+precision highp float;
+
+vec4 getRand(vec2 pos, std::Texture2d tex16)
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 tres = (tex16.size);
+    vec4 r = tex16.sample(pos/tres/sqrt(iResolution.x/600.)*vec2(1,1));
+    return r;
+}
+
+vec4 paintCol(vec2 uv, std::Texture2d BufferC)
+{
+    //return vec4(1);
+    vec3 c = BufferC.sample(uv).xyz;
+    float m = dot(vec3(.333),c);
+    c=(c-m)*1.5+m;
+    c=clamp(.3+.8*c,0.,1.);
+    return vec4(c,1);
+}
+
+vec4 lineCol(vec2 uv, std::Texture2d BufferD)
+{
+    vec4 col=vec4(0);
+    col+=clamp(1.*(1.- BufferD.sampleLod(uv,0.))*11.-1.9,0.,4.);
+    col+=clamp(1.*(1.- BufferD.sampleLod(uv,3.5))*9.-.7,0.,4.);
+    return col;
+}
+
+void mainImage( in std::Texture2d BufferB, in std::Texture2d tex16, in std::Texture2d BufferC, in std::Texture2d BufferD, out vec4 Return )
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+    float sc = iResolution.x/600.;
+
+    vec4 r = getRand(fragCoord*1.1, tex16) - getRand(fragCoord*1.1+vec2(1,-1)*1.5, tex16);
+    vec4 r2 = getRand(fragCoord*.015, tex16)-.5 + getRand(fragCoord*.008, tex16)-.5;
+    vec4 pc = paintCol(fragCoord/iResolution.xy, BufferC);
+
+    vec2 kir = (fragCoord/iResolution.xy);
+
+    vec2 g = BufferB.sample(kir).zw;
+ 
+    vec4 lc = lineCol( (fragCoord+normalize(g)*2.*sc) / iResolution.xy, BufferD).xxxx * (1.25-.5*r.y);
+    vec4 c = 1.-.15*(1.-.7*pow(dot(pc.xyz,vec3(.333)),1.))*lc;
+    c*=pc;
+
+    Return = c*(.95+.06*r.xxxx+.06*r-.0*r2.x);
+
+    vec2 scoord=(fragCoord-.5*iResolution.xy)/iResolution.y;
+    float vign = 1.-.3*dot(scoord,scoord);
+
+    vign*=1.-.7*exp(-sin(fragCoord.x/iResolution.x*3.1416)*40.);
+    vign*=1.-.7*exp(-sin(fragCoord.y/iResolution.y*3.1416)*20.);
+
+    Return *= vign;
+
+
+    Return.w=1.;
+}
+

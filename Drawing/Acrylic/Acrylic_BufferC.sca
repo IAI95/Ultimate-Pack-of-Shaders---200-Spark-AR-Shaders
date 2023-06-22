@@ -1,0 +1,125 @@
+// created by florian berger (flockaroo) - 2016
+// License Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.
+
+// aquarelle with pencil predraw
+
+// trying to resemble watercolors
+
+precision highp float;
+
+#define PI 3.14159265358979
+
+//#define GREEN_SCREEN
+
+vec4 cquant(vec4 c, ivec4 q)
+{
+    return floor(c*vec4(q)+.5)/vec4(q);
+}
+
+vec4 getRand(vec2 pos, std::Texture2d tex16) 
+{
+    vec2 uv = pos / (tex16.size);
+    return tex16.sample(uv);
+}
+
+vec4 getCol(vec2 pos, std::Texture2d BufferA, std::Texture2d tex16, float sc)
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 uv=pos/vec2(596,336);
+    vec4 c1 = BufferA.sample(uv);
+    vec4 c2 = vec4(1.5);                                               // bright white on greenscreen
+    float d = clamp(dot(c1.xyz,vec3(-0.5,1.0,-0.5)),0.0,1.0);
+                                                                      //return mix(c1,c2,1.8*d);
+                                                                     //ignore greenscreen
+    #ifdef GREEN_SCREEN
+    return cquant(mix(c1,c2,1.8*d),ivec4(4,4,4,1000));
+    #else
+    //float sc = 600./iResolution.x;
+    float rnd = getRand(pos*.2*sc, tex16).x-.5;
+    float vign = clamp(1.2-pow(dot(uv-.5,uv-.5)*3.2,2.)+.2*rnd,0.,1.);
+    return mix(vec4(1),c1,vign);
+    return cquant(c1,ivec4(50,16,16,1000));
+    #endif
+}
+
+vec2 getGrad(vec2 pos,float delta, std::Texture2d BufferA, std::Texture2d tex16, float sc)
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 d=vec2(delta,0);
+    return vec2(
+        dot((getCol(pos+d.xy, BufferA, tex16, sc)-getCol(pos-d.xy, BufferA, tex16, sc)).xyz,vec3(.333)),
+        dot((getCol(pos+d.yx, BufferA, tex16, sc)-getCol(pos-d.yx, BufferA, tex16, sc)).xyz,vec3(.333))
+    )/delta;
+}
+
+float htPattern(vec2 pos, std::Texture2d tex16)
+{
+    float p;
+    float r=getRand(pos*.4/.7*1., tex16).x;
+  	p=clamp((pow(r+.3,2.)-.45),0.,1.);
+    return p;
+}
+
+float getVal(vec2 pos, float level, std::Texture2d BufferA, std::Texture2d tex16, float sc)
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    return length(getCol(pos, BufferA, tex16, sc).xyz)+0.0001*length(pos-0.5*vec2(596,336));
+    return dot(getCol(pos, BufferA, tex16, sc).xyz,vec3(.333));
+}
+    
+vec4 getBWDist(vec2 pos, std::Texture2d BufferA, std::Texture2d tex16, float sc)
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    return vec4(smoothstep(.9,1.1,getVal(pos,0., BufferA, tex16, sc)*.9 + htPattern(pos*.7, tex16)));
+}
+
+#define N(a) (a.yx*vec2(1,-1))
+
+// @param[default=24, min=2, max=24] SampNum
+
+void mainImage( in int SampNum, in std::Texture2d BufferA, in std::Texture2d tex16, out vec4 Return )
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+    float sc = 600./iResolution.x;
+    vec2 pos = ((fragCoord-iResolution.xy*.5)*min(vec2(596,336).x/iResolution.x,vec2(596,336).y/iResolution.y))+vec2(596,336).xy*.5;
+    pos = fragCoord/iResolution.xy*vec2(596,336).xy;
+
+    vec2 pos1=pos;
+    vec2 pos2=pos;
+    vec3 col=vec3(0);
+    float cnt=0.;
+    for(int i=0;i<1*SampNum;i++)
+    {   
+        // gradient for wash effect (white on green screen)
+        vec2 gr1=getGrad(pos1,2.0, BufferA, tex16, sc)+.03*(getRand(pos1, tex16).xy-.5);
+        vec2 gr2=getGrad(pos2,2.0, BufferA, tex16, sc)+.03*(getRand(pos2, tex16).xy-.5);
+        float gr1l=length(gr1);
+        float gr2l=length(gr2);
+
+        float fact=float(i)/float(SampNum);
+
+        // colors + wash effect on gradients:
+        // color gets lost from dark areas
+        pos1+=normalize(mix(gr1,N(gr1),15.*length(gr1)))/(1.+15.*length(gr1));
+        // to bright areas
+        pos2-=normalize(mix(gr2,-N(gr2),15.*length(gr2)))/(1.+15.*length(gr2));
+        
+        //float f1=smoothstep(-.2,.2,1.-2.*fact)*2.-1.;
+        float f1=-.25*fact;
+
+        float f2=fact; 
+
+        col+=f1*(getCol(pos1, BufferA, tex16, sc).xyz+.05*(getRand(pos1/4./(1.+gr1l), tex16).xyz-.5));
+        col+=f2*(getCol(pos2, BufferA, tex16, sc).xyz+.05*(getRand(pos2/4./(1.+gr2l), tex16).xyz-.5));
+        
+        cnt+=f1+f2;
+    }
+    // normalize
+    col/=cnt;
+    col=clamp(col,0.,1.);
+	Return = vec4(col,1.0);
+}
+

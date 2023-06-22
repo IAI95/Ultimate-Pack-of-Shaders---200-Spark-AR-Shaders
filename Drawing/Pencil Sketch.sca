@@ -1,0 +1,147 @@
+precision highp float;
+
+// enable GREY_HATCHES for greyscale hatch lines
+#define GREY_HATCHES
+
+// enable COLOUR_HATCHES for coloured hatch lines
+#define COLOUR_HATCHES
+
+#ifdef GREY_HATCHES
+const float hatch_1_brightness = 0.8;
+const float hatch_2_brightness = 0.6;
+const float hatch_3_brightness = 0.3;
+const float hatch_4_brightness = 0.0;
+#else
+const float hatch_1_brightness = 0.0;
+const float hatch_2_brightness = 0.0;
+const float hatch_3_brightness = 0.0;
+const float hatch_4_brightness = 0.0;
+#endif
+
+const float d = 1.0; // kernel offset
+
+float lookup(std::Texture2d Texture, vec2 p, float dx, float dy)
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 uv = (p.xy + vec2(dx * d, dy * d)) / iResolution.xy;
+    vec4 c = Texture.sample(uv.xy);
+	
+	// return as luma
+    return 0.2126*c.r + 0.7152*c.g + 0.0722*c.b;
+}
+
+// @param[default=10.0, min=0.0, max=20.0] density
+// @param[default=0.0, min=0.0, max=10.0] width
+// @param[default=0.8, min=0.0, max=10.0] hatch_1
+// @param[default=0.6, min=0.0, max=10.0] hatch_2
+// @param[default=0.6, min=0.0, max=10.0] hatch_3
+// @param[default=0.15, min=0.0, max=10.0] hatch_4
+
+void mainImage( in float density, in float width, in float hatch_1, in float hatch_2, in float hatch_3, in float hatch_4, in std::Texture2d Texture, out vec4 Return )
+{
+
+  vec2 iResolution = std::getRenderTargetSize();
+  vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+  float iTime = std::getTime();
+  
+	//
+	// Inspired by the technique illustrated at
+	// http://www.geeks3d.com/20110219/shader-library-crosshatching-glsl-filter/
+	//
+	float ratio = iResolution.y / iResolution.x;
+	float coordX = fragCoord.x / iResolution.x;
+	float coordY = fragCoord.y / iResolution.x;
+	vec2 dstCoord = vec2(coordX, coordY);
+	vec2 srcCoord = vec2(coordX, coordY / ratio);	
+	vec2 uv = srcCoord.xy;
+
+	vec3 res = vec3(1.0, 1.0, 1.0);
+    vec4 tex = Texture.sample(uv);
+    float brightness = (0.2126*tex.x) + (0.7152*tex.y) + (0.0722*tex.z);
+#ifdef COLOUR_HATCHES
+	// check whether we have enough of a hue to warrant coloring our
+	// hatch strokes.  If not, just use greyscale for our hatch color.
+	float dimmestChannel = min( min( tex.r, tex.g ), tex.b );
+	float brightestChannel = max( max( tex.r, tex.g ), tex.b );
+	float delta = brightestChannel - dimmestChannel;
+	if ( delta > 0.1 )
+		tex = tex * ( 1.0 / brightestChannel );
+	else
+		tex.rgb = vec3(1.0,1.0,1.0);
+#endif // COLOUR_HATCHES
+  
+    if (brightness < hatch_1) 
+    {
+		if (mod(fragCoord.x + fragCoord.y, density) <= width)
+		{
+#ifdef COLOUR_HATCHES
+			res = vec3(tex.rgb * hatch_1_brightness);
+#else
+			res = vec3(hatch_1_brightness);
+#endif
+		}
+    }
+  
+    if (brightness < hatch_2) 
+    {
+		if (mod(fragCoord.x - fragCoord.y, density) <= width)
+		{
+#ifdef COLOUR_HATCHES
+			res = vec3(tex.rgb * hatch_2_brightness);
+#else
+			res = vec3(hatch_2_brightness);
+#endif
+		}
+    }
+  
+    if (brightness < hatch_3) 
+    {
+		if (mod(fragCoord.x + fragCoord.y - (density*0.5), density) <= width)
+		{
+#ifdef COLOUR_HATCHES
+			res = vec3(tex.rgb * hatch_3_brightness);
+#else
+			res = vec3(hatch_3_brightness);
+#endif
+		}
+    }
+  
+    if (brightness < hatch_4) 
+    {
+		if (mod(fragCoord.x - fragCoord.y - (density*0.5), density) <= width)
+		{
+#ifdef COLOUR_HATCHES
+			res = vec3(tex.rgb * hatch_4_brightness);
+#else
+			res = vec3(hatch_4_brightness);
+#endif
+		}
+    }
+	
+	vec2 p = fragCoord.xy;
+    
+	// simple sobel edge detection,
+	// borrowed and tweaked from jmk's "edge glow" filter, here:
+	// https://www.shadertoy.com/view/Mdf3zr
+    float gx = 0.0;
+    gx += -1.0 * lookup(Texture, p, -1.0, -1.0);
+    gx += -2.0 * lookup(Texture, p, -1.0,  0.0);
+    gx += -1.0 * lookup(Texture, p, -1.0,  1.0);
+    gx +=  1.0 * lookup(Texture, p,  1.0, -1.0);
+    gx +=  2.0 * lookup(Texture, p,  1.0,  0.0);
+    gx +=  1.0 * lookup(Texture, p,  1.0,  1.0);
+    
+    float gy = 0.0;
+    gy += -1.0 * lookup(Texture, p, -1.0, -1.0);
+    gy += -2.0 * lookup(Texture, p,  0.0, -1.0);
+    gy += -1.0 * lookup(Texture, p,  1.0, -1.0);
+    gy +=  1.0 * lookup(Texture, p, -1.0,  1.0);
+    gy +=  2.0 * lookup(Texture, p,  0.0,  1.0);
+    gy +=  1.0 * lookup(Texture, p,  1.0,  1.0);
+    
+	// hack: use g^2 to conceal noise in the video
+    float g = gx*gx + gy*gy;
+	res *= (1.0-g);
+	
+	Return = vec4(res, 1.0);
+}

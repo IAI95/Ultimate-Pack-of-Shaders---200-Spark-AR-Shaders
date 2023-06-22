@@ -1,0 +1,10 @@
+void mainImage( in std::Texture2d Texture, out vec4 Return )
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+	vec2 uv = fragCoord.xy / iResolution.xy;
+    vec4 tex = Texture.sample(uv);
+	Return = vec4(tex.rgb,1.0);
+}

@@ -1,0 +1,75 @@
+// created by florian berger (flockaroo) - 2020
+// License Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.
+
+// trying to resemle some chalk on blackboard hand drawing style
+
+precision highp float;
+
+mat2 ROTM(float ang)
+{
+    return mat2(cos(ang),sin(ang),-sin(ang),cos(ang));
+}
+
+vec2 quad01(int idx)
+{
+    return idx<3 ? vec2((int(mod(float(idx), float(2)))),float(idx)/float(2)) : 1.0 - vec2((int(mod(float((5-idx)), float(2)))),(float(5) - float(idx)) / 2.0);
+}
+
+vec4 getRand(int idx, std::Texture2d tex16)
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 res = iResolution;
+    return tex16.sampleLod(vec2((int(mod(float(idx), float(res.x)))),(int(mod(float((float(idx)/float(res.x))), float(res.y))))), 0.0); 
+}
+
+// @param[default=1.2, min=0.0, max=5.0] StrokeLen
+// @param[default=0.4, min=0.0, max=1.0] StrokeW
+// @param[default=3, min=0, max=10] NumStrokes
+// @param[default=40, min=0, max=100] NumBatches
+
+void mainImage( in float StrokeLen, in float StrokeW, in int NumStrokes, in int NumBatches, in std::Texture2d tex16, out vec4 Return )
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+    
+    vec3 c = vec3(0);
+    
+    for(int i=0; i<NumStrokes * NumBatches; i++)
+    {
+    vec2 sc = (1.0 * fragCoord.xy -0.2 * iResolution.xy) / iResolution.y;
+    int strokeIdx=i;
+    int strokeIdx0=strokeIdx;
+    strokeIdx=(int(mod(float(strokeIdx), float(NumStrokes))));
+    int batchIdx=strokeIdx0/NumStrokes;
+    float ang = float(batchIdx) * 0.17 + floor(iTime * 3.0);
+    float dang = (float((int(mod(float(strokeIdx), float(2)))))-.5)*StrokeW/StrokeLen*1.2;
+    mat2 m = ROTM(dang);
+    vec2 sc0 = (getRand(batchIdx, tex16).zw-.5)*2.;
+    sc-=sc0;
+    sc=ROTM(ang)*sc;
+    //sc0=vec2(0);
+    float strokeFact=float(strokeIdx)/float(NumStrokes)-.5;
+    //float segFact=sc.x/(StrokeLen*.5);
+    sc+=StrokeW*.8*float(NumStrokes)*vec2(0,.7*strokeFact);
+    sc=ROTM(dang)*sc;
+    vec2 uv=sc/(vec2(StrokeLen,StrokeW));
+    //uv=m*uv;
+    uv.y += uv.x*uv.x*1.5;
+    uv += 0.5;
+    vec4 r = tex16.sampleLod((uv+vec2(0,i))*vec2(.02,1.),1.7);
+    vec3 s;
+    s = clamp(vec3(0) + r.x,0.,1.);
+    s*=mix(exp(-12.*uv.x)+exp(-12.*(1.-uv.x)),1.,.5);
+    float a=1.+r.x;
+    a*=1.-smoothstep(0.85,1.,abs(uv.x-.5)*2.);
+    a*=1.-smoothstep(0.85,1.,abs(uv.y-.5)*2.);
+    a*=.3;
+    a=clamp(a,0.,1.);
+    c=c*(1.-a)+s*a;
+    }
+    
+    Return.xyz=c;
+    Return.w=1.;
+}
+

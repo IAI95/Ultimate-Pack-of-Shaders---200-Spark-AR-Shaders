@@ -1,0 +1,24 @@
+// created by florian berger (flockaroo) - 2018
+// License Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.
+
+// aquarelle with pencil predraw
+
+// preparing the input vid
+
+precision highp float;
+
+#define Res1 (tex11.size)
+
+void mainImage( in std::Texture2d Texture, in std::Texture2d tex11, out vec4 Return )
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+    vec2 uv = fragCoord.xy / iResolution.xy;
+    vec4 c1 = Texture.sample(uv);
+    vec4 c2 = tex11.sample((uv+.0*sin(vec2(0,1.6)+iTime))*.1).xxxz*.2+.7;
+    //c2 = vec4(1);
+    Return = mix(c1,c2,clamp(dot(c1.xyz,vec3(-2.5,4.7,-2.5)),0.,1.));
+}
+

@@ -1,0 +1,75 @@
+// created by florian berger (flockaroo) - 2018
+// License Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.
+
+// aquarelle with pencil predraw
+// not as fine-lined as in the original: https://www.shaderoo.org/?shader=1Fh9sQ
+
+// trying to resemble pencil sketch outlines
+
+precision highp float;
+
+vec4 getRand(vec2 pos, std::Texture2d tex16)
+{
+    vec2 tres = (tex16.size);
+    return tex16.sample(pos/tres.xy);
+}
+
+vec4 getCol(vec2 pos, std::Texture2d BufferA)
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    return BufferA.sample(pos/iResolution.xy);
+}
+
+float getVal(vec2 pos, std::Texture2d BufferA)
+{
+    return clamp(dot(getCol(pos, BufferA).xyz,vec3(.333)),0.,1.);
+}
+
+vec2 getGrad(vec2 pos, float eps, std::Texture2d BufferA)
+{
+    vec2 d=vec2(eps,0);
+    return vec2(
+        getVal(pos+d.xy, BufferA) - getVal(pos-d.xy, BufferA),
+        getVal(pos+d.yx, BufferA) - getVal(pos-d.yx, BufferA)
+        )/eps/2.;
+}
+
+void mainImage( in std::Texture2d BufferA, in std::Texture2d tex16, in std::Texture2d BufferB, out vec4 Return )
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+    vec3 c=vec3(0);
+    
+    float sc=iResolution.x/iResolution.y;
+
+    vec2 kir = (fragCoord/iResolution.xy,3.);
+    vec2 g = BufferB.sample(kir).zw;
+    
+    float tFact=0.;
+    int NUM=4;
+    for(int i=0;i<NUM;i++)
+    {
+        vec4 r1 = getRand(fragCoord*.05/sc+float(i)*vec2(113,17)+iTime*tFact, tex16);
+        vec4 r2 = getRand(fragCoord*.10/sc+float(i)*vec2(113,17)+iTime*tFact, tex16);
+        vec4 rm = getRand(fragCoord*.06/sc+float(i/2)*vec2(113,17)+iTime*tFact, tex16);
+        vec2 offs=(r2.xy-.5)*4.+(r1.xy-.5)*7.;
+        float m = clamp((rm.z-.5)*10.+.5,0.,1.);
+
+        
+
+
+
+        m=1.;
+        c+= 5.*pow(length(getGrad(fragCoord+offs*sc,.3*sc, BufferA))*sc,0.7)*m;
+        c-=10.*pow(length(getGrad(fragCoord+offs*sc,.3*sc, BufferA))*sc,1.9)*m;
+    }
+    c/=float(NUM);
+    
+    float vign = 1.-pow(length(fragCoord/iResolution.xy-.5)*1.5,8.);
+    
+    Return.xyz=1.-c*vign;
+    Return.w=1.;
+}
+

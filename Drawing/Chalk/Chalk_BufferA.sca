@@ -1,0 +1,86 @@
+// created by florian berger (flockaroo) - 2020
+// License Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.
+
+// trying to resemle some chalk on blackboard hand drawing style
+
+// this buffer holds the prerendered the gradient
+
+precision highp float;
+
+#define SQR3 1.73205081
+
+vec4 getRand(vec2 pos, std::Texture2d tex16)
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 Res1 = iResolution;
+
+    return tex16.sample(pos/Res1/iResolution.y*iResolution.x);
+}
+
+vec4 getCol(vec2 pos, std::Texture2d Texture)
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 Res0 = iResolution;
+
+    vec2 uv = pos/Res0.xy;
+    uv = clamp(uv,0.5/Res0,1.-.5/Res0);
+    vec4 c1 = Texture.sample(uv);
+    float d = clamp(dot(c1.xyz,vec3(-.5,1.,-.5)),0.0,1.0);
+    vec4 c2 = vec4(.5);
+    return min(mix(c1,c2,1.8*d),.7);
+}
+
+vec4 getColHT(vec2 pos, std::Texture2d Texture, std::Texture2d tex16)
+{
+ 	return smoothstep(.95,1.05,getCol(pos, Texture)+getRand(pos*.2, tex16));
+}
+
+float getVal(vec2 pos, std::Texture2d Texture)
+{
+    vec4 c = getCol(pos, Texture);
+ 	return dot(c.xyz,vec3(0.333, 0.333, 0.333));
+}
+
+vec2 getGrad(vec2 pos, float eps, std::Texture2d Texture)
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 Res = iResolution.xy;
+    vec2 Res0 = iResolution.xy;
+
+    vec2 UVScale = (vec2(Res0.y/Res0.x,1)/Res.y);
+
+   	vec3 d = vec3(eps/UVScale/Res0,0);
+    pos -= 0.33 * d.xy;
+    float v0 = getVal(pos, Texture);
+    return (vec2(getVal(pos+d.xz, Texture), getVal(pos+d.zy, Texture)) - v0) / d.xy;
+}
+
+void mainImage( in std::Texture2d Texture, in std::Texture2d tex16, out vec4 Return )
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+
+    vec2 Res = iResolution.xy;
+    vec2 Res0 = iResolution.xy;
+
+    vec2 ResN = Res0;
+    ResN *= min(ResN.y,Res.y)/ResN.y;
+    ResN *= min(ResN.x,Res.x)/ResN.x;
+    vec2 fc = fragCoord.xy*Res0/ResN;
+
+    Return = (getGrad(fc,.15, Texture)).xy01;
+
+    Return.z = (getVal(fc, Texture));
+
+    if(fragCoord.x<1. && fragCoord.y<1.)
+    Return = (ResN).xy01;
+
+    
+    if(fragCoord.x>ResN.x || fragCoord.y>ResN.y) 
+    {
+        Return=vec4(0,0,0,1);
+        //discard;
+    }
+    
+}
+

@@ -1,0 +1,222 @@
+// created by florian berger (flockaroo) - 2018
+// License Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.
+
+// oil paint brush drawing
+
+// calculating and drawing drawing the brush strokes
+// ...reimplementation of shaderoo.org geometry version, but purely in fragment shader
+// original geometry version of this: https://shaderoo.org/?shader=N6DFZT
+
+#define COLORKEY_BG
+//#define CANVAS
+
+#define Res  std::getRenderTargetSize()
+#define Res0 std::getRenderTargetSize()
+#define Res1 std::getRenderTargetSize()
+
+#define PI 3.1415927
+
+#define N(v) (v.yx*vec2(1,-1))
+
+vec4 getRand(vec2 pos, std::Texture2d iChannel1)
+{
+    return iChannel1.sampleLod(pos/Res1,0.);
+}
+
+vec4 getRand(int idx, std::Texture2d iChannel1)
+{
+    vec2 rres = std::getRenderTargetSize();
+    idx = (int(mod(float(idx), float((rres.x*rres.y)))));
+    return iChannel1.sampleLod(vec2((int(mod(float(idx), float(rres.x)))), float(idx) / float(rres.x)), 0.0);
+}
+
+const float SrcContrast = 1.4;
+const float SrcBright = 1.;
+
+vec4 getCol(vec2 pos, float lod, std::Texture2d iChannel0, std::Texture2d iChannel2)
+{
+    // use max(...) for fitting full image or min(...) for fitting only one dir
+    vec2 uv = (pos-.5*Res)*min(Res0.y/Res.y,Res0.x/Res.x)/Res0+.5;
+    vec2 mask = step(vec2(-.5),-abs(uv-.5));
+    vec4 col = clamp(((iChannel0.sampleLod(uv,lod)-.5)*SrcContrast+.5*SrcBright),0.,1.)/**mask.x*mask.y*/;
+    #ifdef COLORKEY_BG
+    vec4 bg = iChannel2.sampleLod(uv,lod+.7);
+    col = mix(col,bg,dot(col.xyz,vec3(-.6,1.3,-.6)));
+    #endif
+    return col;
+}
+
+//uniform float FlickerStrength;
+
+vec3 getValCol(vec2 pos, float lod, std::Texture2d iChannel0, std::Texture2d iChannel2)
+{
+    return getCol(pos,1.5+log2(Res0.x/600.), iChannel0, iChannel2).xyz;
+    // return getCol(pos,1.5+log2(Res0.x/600.), iChannel0, iChannel2).xyz*.7+getCol(pos,3.5+log2(Res0.x/600.), iChannel0, iChannel2).xyz*.3;
+}
+
+float compsignedmax(vec3 c)
+{
+    vec3 s=sign(c);
+    vec3 a=abs(c);
+    if (a.x>a.y && a.x>a.z) return c.x;
+    if (a.y>a.x && a.y>a.z) return c.y;
+    return c.z;
+}
+
+vec2 getGradMax(vec2 pos, float eps, std::Texture2d iChannel0, std::Texture2d iChannel2)
+{
+    vec2 d=vec2(eps,0);
+    // calc lod according to step size
+    float lod = log2(2.*eps*Res0.x/Res.x);
+    //lod=0.;
+    return vec2(
+        compsignedmax(getValCol(pos+d.xy,lod, iChannel0, iChannel2)-getValCol(pos-d.xy,lod, iChannel0, iChannel2)),
+        compsignedmax(getValCol(pos+d.yx,lod, iChannel0, iChannel2)-getValCol(pos-d.yx,lod, iChannel0, iChannel2))
+        )/eps/2.;
+}
+
+vec2 quad(vec2 p1, vec2 p2, vec2 p3, vec2 p4, int idx) 
+{
+    vec2 p[6];
+    p[0] = vec2(p1 );
+    p[1] = vec2( p2);
+    p[2] = vec2(p3 );
+    p[3] = vec2( p2);
+    p[4] = vec2(p4 );
+    p[5] = vec2( p3);
+
+    return p[(int(mod(float(idx), float(6))))];
+}
+
+const float BrushDetail = 0.1;
+const float StrokeBend = -1.0;
+const float BrushSize = 1.0;
+
+// @param[default=50, min=20, max=80] QUALITY_PERCENT
+
+void mainImage( in int iFrame, in int QUALITY_PERCENT, in std::Texture2d iChannel0, in std::Texture2d iChannel1, in std::Texture2d iChannel2, out vec4 Return )
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+    vec2 pos = fragCoord.xy;
+    pos += 4.0*sin(iTime*.5*vec2(1,1.7))*iResolution.y/400.;
+    
+    float canv = 0.0;
+    canv=max(canv,( getRand(pos*vec2(.7,.03).xy, iChannel1) ).x);
+    canv=max(canv,( getRand(pos*vec2(.7,.03).yx, iChannel1) ).x);
+    Return=vec4(vec3(.93+.07*canv),1);
+    canv-=.5;
+    
+    int pidx0 = 0;
+    
+    vec3 brushPos;
+    //int layerScalePercent = QUALITY_PERCENT;
+    float layerScaleFact=float(QUALITY_PERCENT)/100.;
+    float ls = layerScaleFact*layerScaleFact;
+
+    //number of grid positions on highest detail level
+
+    // int NumGrid=int(float(int(0c10000)/2)*min(pow(Res.x/1920.,.5),1.)*(1.-ls));
+
+    // int NumGrid = int(32768.0 * min(pow(iResolution.x/1920., .5), 1.) * (1.-ls));
+    
+    int NumGrid = 10000;
+
+    float aspect=Res.x/Res.y;
+    int NumX = int(sqrt(float(NumGrid)*aspect)+.5);
+    int NumY = int(sqrt(float(NumGrid)/aspect)+.5);
+    //int pidx2 = NumX*NumY*4/3-pidx;
+    int pidx2 /*= NumTriangles/2-pidx*/;
+    // calc max layer NumY*layerScaleFact^maxLayer==10. - so min-scale layer has at least 10 strokes in y
+    int maxLayer=int(log2(10./float(NumY))/log2(layerScaleFact));
+    //maxLayer=8;
+    for(int layer = min(maxLayer,11); layer>=0; layer--) // min(...) at beginning - possible crash cause on some systems?
+    {
+    int NumX2 = int(float(NumX) * pow(layerScaleFact,float(layer))+.5);
+    int NumY2 = int(float(NumY) * pow(layerScaleFact,float(layer))+.5);
+
+    // actually -2..2 would be needed, but very slow then...
+    //for(int nx=-1;nx<=1;nx++)
+    //for(int ny=-1;ny<=1;ny++)
+    // replaced the 2 loops above by 1 loop and some modulo magic (possible crash cause on some systems?)
+    for(int ni=0;ni<9;ni++)
+    {
+        int nx = (int(mod(float(ni), float(3-1))));
+        int ny = ni / 3-1;
+    // index centerd in cell
+    int n0 = int(dot(floor(vec2(pos/Res.xy*vec2(NumX2,NumY2))),vec2(1,NumX2)));
+    pidx2=n0+NumX2*ny+nx;
+    int pidx=pidx0+pidx2;
+    
+    brushPos.xy = (vec2((int(mod(float(pidx2), float(NumX2)))), pidx2/NumX2)+.5)/vec2(NumX2,NumY2)*Res;
+    float gridW = Res.x/float(NumX2);
+    float gridW0 = Res.x/float(NumX);
+    // add some noise to grid pos
+    brushPos.xy += gridW*(getRand(pidx+iFrame*123*0, iChannel1).xy-.5);
+    // more trigonal grid by displacing every 2nd line
+    
+    brushPos.x += gridW*.5*(float((int(mod(float((pidx2/NumX2)), float(2)))))-.5);
+    
+    vec2 g; 
+    g = getGradMax(brushPos.xy,gridW*1., iChannel0, iChannel2)*.5+getGradMax(brushPos.xy,gridW*.12, iChannel0, iChannel2)*.5
+        +.0003*sin(pos/Res*20.); // add some gradient to plain areas
+    float gl=length(g);
+    vec2 n = normalize(g);
+    vec2 t = N(n);
+    
+    brushPos.z = .5;
+
+    // width and length of brush stroke
+    float wh = (gridW-.6*gridW0)*1.2;
+    float lh = wh;
+    float stretch=sqrt(1.5*pow(3.,1./float(layer+1)));
+    wh*=BrushSize*(.8+.4*getRand(pidx, iChannel1).y)/stretch;
+    lh*=BrushSize*(.8+.4*getRand(pidx, iChannel1).z)*stretch;
+    float wh0=wh;
+    
+    wh/=1.-.25*abs(StrokeBend);
+    
+    wh = (gl*BrushDetail<.003/wh0 && wh0<Res.x*.02 && layer!=maxLayer) ? 0. : wh;
+    
+    vec2 uv=vec2(dot(pos-brushPos.xy,n),dot(pos-brushPos.xy,t))/vec2(wh,lh)*.5;
+    // bending the brush stroke
+    uv.x-=.125*StrokeBend;
+    uv.x+=uv.y*uv.y*StrokeBend;
+    uv.x/=1.-.25*abs(StrokeBend);
+    uv+=.5;
+    //float s=mix((uv.x-.4)/.6,1.-uv.x,step(.5,uv.x))*5.;
+    float s=1.;
+    s*=uv.x*(1.-uv.x)*6.;
+    s*=uv.y*(1.-uv.y)*6.;
+    float s0=s;
+    s=clamp((s-.5)*2.,0.,1.);
+    vec2 uv0=uv;
+    
+    // brush hair noise
+    float pat = iChannel1.sampleLod(uv*1.5*sqrt(Res.x/600.)*vec2(.06,.006),1.).x + iChannel1.sampleLod(uv*3.*sqrt(Res.x/600.)*vec2(.06,.006),1.).x;
+    vec4 rnd = getRand(pidx, iChannel1);
+    
+    s0=s;
+    s*=.7*pat;
+    uv0.y=1.-uv0.y;
+    float smask=clamp(max(cos(uv0.x*PI*2.+1.5*(rnd.x-.5)),(1.5*exp(-uv0.y*uv0.y/.15/.15)+.2)*(1.-uv0.y))+.1,0.,1.);
+    s+=s0*smask;
+    s-=.5*uv0.y;
+#ifdef CANVAS
+    s+=(1.-smask)*canv*1.;
+    s+=(1.-smask)*(getRand(pos*.7, iChannel1).z-.5)*.5;
+#endif
+    
+    vec4 dReturn;
+    dReturn.xyz = getCol(brushPos.xy,1., iChannel0, iChannel2).xyz*mix(s*.13+.87,1.,smask)/**(.975+.025*s)*/;
+    s=clamp(s,0.,1.);
+    dReturn.w = s * step(-0.5,-abs(uv0.x-.5)) * step(-0.5,-abs(uv0.y-.5));
+    // do alpha blending
+    Return = mix(Return,dReturn,dReturn.w);
+    }
+    pidx0+=NumX2*NumY2;
+    }
+}
+

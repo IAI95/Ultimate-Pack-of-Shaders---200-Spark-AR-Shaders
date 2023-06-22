@@ -1,0 +1,61 @@
+// created by florian berger (flockaroo) - 2018
+// License Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.
+
+// oil paint brush drawing
+
+// original geometry version of this: https://shaderoo.org/?shader=N6DFZT
+
+// some relief lighting
+
+#define Res  std::getRenderTargetSize()
+#define Res1 std::getRenderTargetSize()
+
+float getVal(vec2 uv, std::Texture2d iChannel0)
+{
+    return length(iChannel0.sampleLod(uv,.5+.5*log2(Res.x/1920.)).xyz)*1.;
+}
+    
+vec2 getGrad(vec2 uv,float delta, std::Texture2d iChannel0)
+{
+    vec2 d=vec2(delta,0);
+    return vec2(
+        getVal(uv+d.xy, iChannel0)-getVal(uv-d.xy, iChannel0),
+        getVal(uv+d.yx, iChannel0)-getVal(uv-d.yx, iChannel0)
+    )/delta;
+}
+
+// @param[default=0.15, min=0.0, max=3.0] PaintSpec
+// @param[default=1.5, min=0.0, max=3.0] Vignette
+
+void mainImage( in float PaintSpec, in float Vignette, in std::Texture2d iChannel0, in std::Texture2d iChannel1, out vec4 Return )
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+	vec2 uv = fragCoord/Res;
+    vec3 n = vec3(getGrad(uv,1.0/iResolution.y, iChannel0),150.0);
+    //n *= n;
+    n=normalize(n);
+    Return=vec4(n,1);
+    vec3 light = normalize(vec3(-1,1,1.4));
+    float diff=clamp(dot(n,light),0.,1.0);
+    float spec=clamp(dot(reflect(light,n),vec3(0,0,-1)),0.0,1.0);
+    spec=pow(spec,12.0)*PaintSpec;
+    float sh=clamp(dot(reflect(light*vec3(-1,-1,1),n),vec3(0,0,-1)),0.0,1.0);
+    sh=pow(sh,4.0)*.1;
+	Return = iChannel0.sample(uv)*mix(diff,1.,.9)+spec*vec4(.85,1.,1.15,1.)+sh*vec4(.85,1.,1.15,1.);
+	Return.w=1.;
+    vec2 uv2 = (fragCoord-.5*Res)*min(Res1.y/Res.y,Res1.x/Res.x)/Res1+.5;
+    vec4 col0 = iChannel1.sample(uv2);
+    
+    if(true)
+    {
+        vec2 scc=(fragCoord-.5*iResolution.xy)/iResolution.y;
+        float vign = 1.1-Vignette*dot(scc,scc);
+        vign*=1.-.7*Vignette*exp(-sin(fragCoord.x/iResolution.x*3.1416)*40.);
+        vign*=1.-.7*Vignette*exp(-sin(fragCoord.y/iResolution.y*3.1416)*20.);
+        Return.xyz *= vign;
+    }
+}
+

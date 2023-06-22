@@ -1,0 +1,44 @@
+// created by florian berger (flockaroo) - 2018
+// License Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.
+//
+// scribble blue in tweets of two
+//
+// improved + golfed down ballpoint effect
+//
+// check "https://10xfx.com" for this and more effects for AfterEffects and OpenFX
+
+// @param[default=20, min=0, max=1500] Intensity
+
+void mainImage( in int Intensity, in std::Texture2d Texture, out vec4 Return )
+{
+    vec2 R = std::getRenderTargetSize();
+    vec2 f = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+    #define V(p) Texture.sampleLod((p)/R,.5).y
+
+    Return = vec4(0);
+
+	float S = sqrt(R.x)/30.,h,s;
+    Return -= Return - 1.0;
+    vec2 g,d=R/2E2,p,q,v,i,e=vec2(d.x*.2,0);
+    for(int j=0;j<Intensity;j++)
+    {
+        int k=j/16;
+    	if((int(mod(float(j), float(16)))) == 0)
+    {
+        i=floor(f/d)+vec2( (int(mod(float(k), float(13)))) , k/13 ) -6.0;
+        s=mod(i.y,2.)-.5;
+        p=(i+s)*d; v-=v;
+    }
+	    q=p;
+        g=V(p)-vec2(V(p-e),V(p-e.yx));
+        h=pow(dot(g,g),.3)*20.;
+        v=mix(v, 
+              mat2( cos( .8*vec4(4,2,6,4) + atan(h)*1.3*s+s ) ) * normalize(g), 
+              atan(h*h/8.));
+        p+=v*d.x;
+	    g=q-p; q=f-p; float l=length(g); g/=l; h=dot(q,g);
+		Return -= vec4(.3,.2,.1,0)*max(S-max(S-min(l-h,h),abs(dot(q,g.yx*vec2(1,-1)))),0.);
+    }
+}
