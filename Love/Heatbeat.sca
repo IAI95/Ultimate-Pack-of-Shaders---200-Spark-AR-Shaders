@@ -1,0 +1,88 @@
+// ref: https://www.shadertoy.com/view/XsfGRn
+
+precision highp float;
+
+#define PI 3.1415926
+
+// @param[default=0.2, min=0.1, max=1.0] Line_Space
+// @param[default=0.001666, min=0.0, max=0.01] LINE_THICKNESS
+// @param[default=#FFFFFF90] bg_color
+// @param[default=#FF0000FF] color_1
+// @param[default=#E67300FF] color_2
+// @param[default=#FFFF00FF] color_3
+// @param[default=#00FF00FF] color_4
+// @param[default=#00AAE6FF] color_5
+// @param[default=#4000FFFF] color_6
+// @param[default=#FF00FFFF] color_7
+// @param[default=#FFAAFFFF] color_8
+// @param[default=#FFFFFF00] heart_color
+
+void mainImage( in float Line_Space, in float LINE_THICKNESS, in vec4 bg_color, in vec4 color_1, in vec4 color_2, in vec4 color_3, in vec4 color_4, in vec4 color_5, in vec4 color_6, in vec4 color_7, in vec4 color_8, in vec4 heart_color, out vec4 Return )
+{
+
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+    vec2 scr_pos = (2.0 * vec2(fragCoord.x, 1.0 - fragCoord.y) - vec2(iResolution.x, 1.0 - iResolution.y)) / min(iResolution.x, iResolution.y);
+    scr_pos.y -= 0.25;
+    float radius = length(scr_pos);
+
+    bg_color = (bg_color - 0.1 *  scr_pos.y) * (1.0 - 0.3333 * radius);
+    
+    // animate beating over position
+    float time_factor = mod(iTime, 1.5) / 1.5;
+    float sined_factor = pow(time_factor, 0.2) * 0.5 + 0.5;
+    sined_factor = 1.0 + 
+        sined_factor * 0.5 * sin(time_factor * PI * 10.0 + scr_pos.y * 0.5) * 
+        exp(-time_factor * 5.0);
+    scr_pos *= vec2(0.5, 1.5) + sined_factor * vec2(0.5, -0.5);
+    
+    // heart shape
+    float amp = abs(atan(scr_pos.x, scr_pos.y) / PI);
+    float heart_dist = (13.0 * amp - 22.0 * amp * amp + 10.0 * amp * amp * amp) / (6.0 - 5.0 * amp);
+    
+    // colored
+    float lighten = 1.0;
+    lighten = 0.75 + 0.75 * scr_pos.x;
+    lighten *= 1.0 - 0.25 * radius;
+    lighten = 0.25 + 0.75 * lighten;
+    lighten *= 0.5 + 0.5 * pow(1.0 - clamp(radius / heart_dist, 0.0, 1.0), 0.1);
+    
+    // distance field lines
+    float heart_field = radius - heart_dist;
+    float dgradient = fwidth(heart_field);
+    float distance_coord = heart_field / Line_Space;
+    distance_coord -= iTime / 1.5; // animate moving
+    float linespace_sdf = abs(fract(distance_coord + 0.5) - 0.5) * Line_Space;
+    float lines = smoothstep(LINE_THICKNESS - dgradient, 
+    LINE_THICKNESS + dgradient, 
+    linespace_sdf);
+
+    float heart_range = smoothstep(0.06, 0.0, heart_field);
+    float beat_factor = 1.0;
+    
+    lines = max(lines, 1.0);
+    // rainbow-ramped color
+
+    vec4 rainbow[8];
+
+    rainbow[0]  =  color_1;
+    rainbow[1]  =  color_2;
+    rainbow[2]  =  color_3;
+    rainbow[3]  =  color_4;
+    rainbow[4]  =  color_5;
+    rainbow[5]  =  color_6;
+    rainbow[6]  =  color_7;
+    rainbow[7]  =  color_8;
+
+    float dist_idx = floor(distance_coord);
+    dist_idx = 7.0 - mod(dist_idx, 8.0);
+    bg_color = mix(bg_color * rainbow[int(dist_idx)], bg_color, 
+        smoothstep(0.01, -0.01, heart_field - 0.1)); // a bit outsider offset
+    
+    // final color composition (from outside-background to inside-heart)
+    vec4 final_color = vec4(mix(bg_color * lines , heart_color , heart_range * beat_factor));
+    
+    Return = vec4(final_color);
+}
