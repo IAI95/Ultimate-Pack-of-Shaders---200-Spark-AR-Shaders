@@ -1,0 +1,82 @@
+precision highp float;
+
+#define int2 vec2
+#define float2 vec2
+#define int3 vec3
+#define float3 vec3
+#define int4 vec4
+#define float4 vec4
+#define frac fract
+#define float2x2 mat2
+#define float3x3 mat3
+#define float4x4 mat4
+#define saturate(x) clamp(x,0.,1.)
+#define lerp mix
+#define CurrentTime (iTime)
+#define sincos(x,s,c) s = sin(x),c = cos(x)
+#define mul(x,y) (x*y)
+#define atan2 atan
+#define fmod mod
+#define static
+
+float2 hash(float2 p)
+{
+    p = float2(dot(p, float2(127.1f, 311.7f)), dot(p, float2(269.5f, 183.3f)));
+    return 2.f * frac(sin(p) * 43758.5453123f) - 1.f;
+}
+
+
+float simplexNoise(float2 uv)
+{
+    const float k1 = 0.366025f;
+    const float k2 = 0.211324f;
+
+    int2 idx = floor(uv + (uv.x + uv.y) * k1);
+    float2 a = uv - (float2(idx) - float(idx.x + idx.y) * k2);
+    int2 tb = a.y > a.x ? int2(0, 1) : int2(1, 0);
+    float2 b = a - tb + k2;
+    float2 c = a - 1.f + k2 * 2.f;
+    
+    float3 kernel = max(0.5f - float3(dot(a, a), dot(b, b), dot(c, c)), 0.f);
+    float3 noise = kernel * kernel * kernel * kernel * float3(dot(a, hash(idx)), dot(b, hash(idx + tb)), dot(c, hash(idx + 1.f)));
+    
+    return dot(float3(70.f,70.f,70.f), noise);
+}
+
+
+float verticalLine(float2 uv, float time)
+{
+    float uvX = uv.x + time*0.000001;
+    float2 xHash = hash(float2(uvX,uvX));
+    float vertical = step(0.999999,sin(uvX*1000.0 * (xHash.x*0.01+0.01)));
+    
+    float uvY = uv.y + time*0.00001;
+    float2 yHash = hash(float2(uvY,uvY));
+    vertical *= sin(uvY*1000.0 * (yHash.x));
+    
+    
+    return saturate(1.0 - vertical);
+}
+
+// @param[default=1.0, min=0.0, max=2.0] Darkness
+// @param[default=1.7, min=0.1, max=3.0] Vignette
+
+void mainImage( in float Darkness, in float Vignette, in std::Texture2d Texture, out vec4 Return )
+{
+
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+    vec2 uv = fragCoord/iResolution.xy;
+    float t = iTime;
+    
+    float3 col = float3(0.0,0.0,0.0);
+    col += verticalLine(uv,t) * Darkness;
+    col += (1.0 - verticalLine(uv-3.0,t*5.0))*0.5;
+    col *= smoothstep(0.95,0.85, simplexNoise((uv + hash(float2(t,t))*1000.0)*10.0));
+    col *= saturate(1.f - hash(uv + t * 0.0001f).x * 0.1);
+    col *= smoothstep(Vignette , 0.0, length(uv-0.5));
+    
+    Return = vec4(col*Texture.sample(uv).rgb,1.0);
+}

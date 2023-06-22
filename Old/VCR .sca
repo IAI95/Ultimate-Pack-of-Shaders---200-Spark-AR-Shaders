@@ -1,0 +1,64 @@
+precision highp float;
+
+const float PI = 3.14159265;
+
+float rand(vec2 co)
+{
+    return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453);
+}
+
+float sample_noise(vec2 fragCoord, std::Texture2d tex12)
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    float iTime = std::getTime();
+    vec2 uv = mod(fragCoord + vec2(0, 100. * iTime), iResolution.xx);
+    float value = tex12.sample( uv / iResolution.xy).r;
+    return pow(value, 7.); //  sharper ramp
+}
+
+// @param[default=0.002, min=0.0, max=0.01] Wobble
+// @param[default=0.5, min=0.0, max=1.0] Grade
+// @param[default=2.0, min=0.0, max=5.0] Line
+// @param[default=0.2, min=0.0, max=1.0] Vignette
+
+void mainImage( in float Wobble, in float Grade, in float Line, in float Vignette, in std::Texture2d tex12, in std::Texture2d Texture, out vec4 Return )
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+    vec2 uv = 1.0 - (fragCoord/iResolution);
+    
+    //  wobble
+    vec2 wobbl = vec2(Wobble * rand(vec2(iTime, fragCoord.y)), 0.);
+    
+    //  band distortion
+    float t_val = tan(0.25 * iTime + uv.y * PI * .67);
+    vec2 tan_off = vec2(wobbl.x * min(0., t_val), 0.);
+    
+    //  chromab
+    vec4 color1 = Texture.sample( (1.0 - uv) + wobbl + tan_off);
+    vec4 color2 = Texture.sample(( (1.0 - uv) + wobbl * 1.5) + (tan_off * 1.3)) * 1.005;
+    //  combine + grade
+    vec4 color = vec4(color2.rg, pow(color1.b, .67), 1.);
+    color.rgb = mix(Texture.sample( (1.0 - uv) + tan_off).rgb, color.rgb, Grade);
+    
+    //  scanline sim
+    float s_val = ((sin(2. * PI * uv.y + iTime * 20.) + sin(2. * PI * uv.y)) / 2.) * .015 * sin(iTime);
+    color += s_val;
+    
+    //  noise lines
+    float ival = iResolution.y / 4.;
+    float r = rand(vec2(iTime, fragCoord.y));
+    //  dirty hack to avoid conditional
+
+    float on = floor(mod(float(fragCoord.y + (iTime * r * 1000.)) , (float(ival + Line)) / ival));
+
+    float wh = sample_noise(fragCoord, tex12) * on;
+    color = vec4(min(1., color.r + wh), 
+                 min(1., color.g + wh),
+                 min(1., color.b + wh), 1.);
+    
+    float vig = 1. - sin(PI * uv.x) * sin(PI * uv.y);
+    Return = color - (vig * Vignette);
+}

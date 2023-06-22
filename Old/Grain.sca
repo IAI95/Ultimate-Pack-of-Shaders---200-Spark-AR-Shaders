@@ -1,0 +1,19 @@
+precision highp float;
+
+// @param[default=16.0, min=0.0, max=30.0] Strength
+
+void mainImage( in float Strength, in std::Texture2d Texture, out vec4 Return )
+{
+
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+	  vec2 uv = fragCoord.xy / iResolution.xy;
+    
+    vec4 color = Texture.sample(uv);
+    
+    float x = (uv.x + 4.0 ) * (uv.y + 4.0 ) * (iTime * 10.0);
+	  vec4 grain = vec4(mod((mod(x, 13.0) + 1.0) * (mod(x, 123.0) + 1.0), 0.01)-0.005) * Strength;
+    
+		Return = color + grain;
+}
