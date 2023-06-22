@@ -1,0 +1,27 @@
+precision highp float;
+
+// @param[default=50.0, min=10.0, max=100.0] Size
+// @param[default=4.0, min=1.0, max=9.0] Threads
+
+void mainImage( in float Threads, in float Size, in std::Texture2d Texture, out vec4 Return )
+{
+  vec2 iResolution = std::getRenderTargetSize();
+  vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+  float iTime = std::getTime();
+
+  vec2 posInTile = (mod(vec2(fragCoord), float(Size)));
+  vec2 tileNum = floor(vec2(fragCoord)/ Size);
+
+  vec2 nrmPosInTile = posInTile / float(Size);
+  tileNum.y += floor(abs(nrmPosInTile.x - 0.5) + nrmPosInTile.y);
+
+  vec2 texCoord = tileNum * float(Size) / iResolution.xy;
+  //texCoord.y = 1.0 - texCoord.y;
+  
+  vec3 color = Texture.sample(texCoord).rgb;
+
+  color *= fract((nrmPosInTile.y + abs(nrmPosInTile.x - 0.5)) * floor(Threads));
+
+  Return = vec4(color, 1.0);
+
+}

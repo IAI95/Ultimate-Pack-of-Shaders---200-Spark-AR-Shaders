@@ -1,0 +1,60 @@
+precision highp float;
+
+//luminance
+float lum(in vec4 pix)
+{
+    return dot(pix.rgb,vec3(0.3,0.59,0.11));
+}
+    // @param[default=50.0, min=20.0, max=100.0] Size
+
+    void mainImage( in float Size, in std::Texture2d Texture, out vec4 Return )
+    {
+    
+      vec2 iResolution = std::getRenderTargetSize();
+      vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+      float iTime = std::getTime();
+  
+      vec2 div = iResolution.xy/Size;
+  
+      vec2 uv = fragCoord/iResolution.xy;
+      vec2 uv2 = floor(uv*div)/div;
+      
+      vec2 diff = (uv-uv2)*div;
+      
+      vec4 pix = Texture.sample(uv2);
+      
+      if ( pow(diff.x - 0.5,2.0) + pow(diff.y - 0.5,2.0) > 0.25) {
+          
+          vec4 pmax;
+          vec4 pmin;
+          vec2 v2 = Size/iResolution.xy;
+  
+          if (diff.x<0.5) { v2.x = -v2.x; }
+          if (diff.y<0.5) { v2.y = -v2.y; }
+  
+          vec4 p1  = Texture.sample( uv2 + vec2( 0.0, v2.y ));
+          vec4 p2  = Texture.sample( uv2 + vec2( v2.x, 0.0 ));
+          vec4 p3  = Texture.sample( uv2 + vec2( v2.x, v2.y ));
+  
+          if ( lum(p1) > lum(p2) ) {
+              pmax = p1;
+              pmin = p2;
+          } else {
+              pmax = p2;
+              pmin = p1;
+          }
+  
+          if ( lum(p3) < lum(pmin) ) {
+              pmin = p3;
+          }
+  
+          if ( lum(pix) > lum(pmax) ) {
+              pix = pmax;
+          } else if ( lum(pmin) > lum(pix) ) {
+              pix = pmin;
+          }        
+          
+      }
+      
+      Return = pix;
+  }

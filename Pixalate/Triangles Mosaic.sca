@@ -1,0 +1,16 @@
+// @param[default=20.0, min=1.0, max=40.0] Size
+
+void mainImage( in float Size, in std::Texture2d Texture, out vec4 Return)
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+    vec2 tile_num = vec2(float(Size) , float(Size*1.5));
+
+	vec2 uv = fragCoord.xy / iResolution.xy;
+	vec2 uv2 = floor(uv*tile_num)/tile_num;
+    uv -= uv2;
+    uv *= tile_num;
+	Return = (Texture.sample(uv2 + vec2(step(1.0-uv.y,uv.x)/(2.0*tile_num.x), step(uv.x,uv.y)/(2.0*tile_num.y))));
+}

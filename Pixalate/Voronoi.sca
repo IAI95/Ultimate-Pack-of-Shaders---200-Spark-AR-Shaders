@@ -1,0 +1,40 @@
+const float TWO_PI = 6.283185307;
+
+vec2 rnd2(vec2 s)
+{
+    return fract(sin(vec2(dot(s,vec2(127.1,311.7)),dot(s,vec2(269.5,183.3))))*43758.5453);
+}
+
+    // @param[default=10.0, min=1.0, max=30.0] Size
+    // @param[default=1.0, min=1.0, max=6.0] Speed
+
+    void mainImage( in float Speed, in float Size, in std::Texture2d Texture, out vec4 Return )
+    {
+    
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+    float mr = min(iResolution.x, iResolution.y);
+    vec2 uv = (fragCoord*2.0-iResolution.xy)*Size/mr;
+    vec2 iuv = floor(uv);
+    vec2 fuv = fract(uv);
+    
+    float t = fract(iTime)*Speed;
+    float md = 10.0;
+   	vec2 cuv = iuv;
+    for(int x = -1; x <= 1; ++x)
+    {
+        for(int y = -1; y <= 1; ++y)
+        {
+            vec2 n = vec2(x, y);
+            vec2 rp = 0.5+sin(t+rnd2(iuv+n)*TWO_PI)*0.5;
+            float l = length(n+rp-fuv);
+            if (md > l) cuv = iuv+n+rp;
+            md = min(md, l); 
+        }
+    }
+    
+    vec2 tuv = mr*0.5/Size*cuv/iResolution.xy+0.5;
+    Return = Texture.sample(tuv);
+}

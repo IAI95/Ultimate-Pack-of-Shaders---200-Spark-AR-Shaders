@@ -1,0 +1,59 @@
+precision highp float;
+
+vec3 rgb(int r, int g, int b)
+{
+  return vec3(float(r)/256.,float(g)/256.,float(b)/256.);
+}
+
+// @param[default=30.0, min=10.0, max=100.0] Size
+
+void mainImage( in float Size, in std::Texture2d Texture, out vec4 Return )
+{
+
+  vec2 iResolution = std::getRenderTargetSize();
+  vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+  float iTime = std::getTime();
+    
+  // originally, this is the volume of the music... not sure how to get the volume of the video playback... so it's a stud
+  float loudness = cos(iTime/0.5);
+  float lineWidth = 0.0;
+    
+  vec4 palette[6];
+
+  palette[0]  =  vec4(0.9725, 1.0, 0.1686, 1.0);
+  palette[1]  =  vec4(1.0, 0.9412, 0.1098, 1.0);
+  palette[2]  =  vec4(0.9451, 0.2196, 0.1686, 1.0);
+  palette[3]  =  vec4(0.2275, 0.8588, 1.0, 1.0);
+  palette[4]  =  vec4(1.0, 1.0, 1.0, 1.0);
+  palette[5]  =  vec4(1.0, 1.0, 1.0, 1.0);
+
+
+  vec4 line = vec4(0.0, 0.0, 0.0, 1.0); // line are the lines between pixels. they are brighter.
+    
+  vec2 coord = fragCoord/iResolution.xy;
+
+  vec2 resolution = vec2(iResolution.x/Size,iResolution.y/Size);
+
+  vec2 uv = mix(coord,(floor(coord*resolution) / resolution),1.0);
+  vec2 pix = uv * resolution;
+
+  vec4 orig = vec4((Texture.sample(uv).rgb), 1.0);
+  vec4 col = vec4(line);
+  vec2 line_width = vec2(lineWidth / iResolution.x , lineWidth / iResolution.y);
+    
+  vec2 pix_thresh = mix(vec2(0.0 , 0.0), line_width, 1.0);
+  
+  bool is_pixel = (coord.x-uv.x) > pix_thresh.x && (coord.y-uv.y) > pix_thresh.y;
+
+    
+  if ( is_pixel )
+  {
+    float val = (orig.r + orig.g + orig.b) / 3.0;
+    int shade = min(6,int(6.0*log(1.0+val*1.71))); // log(1+x*(e-1))
+    col = palette[shade];
+  }
+
+  col = mix(orig,col,0.0);
+
+  Return = vec4(col);
+}

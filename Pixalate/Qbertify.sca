@@ -1,0 +1,75 @@
+precision highp float;
+
+const float light = 1.15;
+const float dark = 0.85;
+
+bool tri(const vec2 p1, const vec2 p2, const vec2 p3, const vec2 p)
+{
+    float alpha = ((p2.y - p3.y)*(p.x - p3.x) + (p3.x - p2.x)*(p.y - p3.y)) /
+        ((p2.y - p3.y)*(p1.x - p3.x) + (p3.x - p2.x)*(p1.y - p3.y));
+
+    float beta = ((p3.y - p1.y)*(p.x - p3.x) + (p1.x - p3.x)*(p.y - p3.y)) /
+       ((p2.y - p3.y)*(p1.x - p3.x) + (p3.x - p2.x)*(p1.y - p3.y));
+
+    float gamma = 1.0 - alpha - beta;
+    
+    return (alpha >= 0.0 && beta >= 0.0 && gamma >= 0.0);      
+}
+
+// @param[default=3.0, min=1.0, max=7.0] PixelSize
+
+void mainImage( in float PixelSize, in std::Texture2d Texture, out vec4 Return )
+{
+	vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+    //Return = vec4(0.0, 0.0, 0.0, 0.0); return;
+    
+    float cellFactor = floor(clamp(iResolution.x/30., 20., 100.)/6.)*6.;
+    vec2 cellSize = vec2(cellFactor * PixelSize, cellFactor * PixelSize * 1.5);
+    float zoom = max(iResolution.x/iResolution.x, iResolution.y/iResolution.y);
+
+    vec2 cell = vec2(mod(fragCoord.x, cellSize.x), mod(fragCoord.y, cellSize.y));
+    vec2 norm = cell.xy / cellSize;
+    vec2 res = vec2(0.0, 0.0);
+    float bright = 1.0;
+    
+    //1
+    if (tri(vec2(0.0,0.0), vec2(1.0,0.0), vec2(0.5,0.125), norm)) {res = vec2(0.5, -0.125); bright = light;}
+    //2
+    else if (tri(vec2(0.0,0.0), vec2(0.5,0.125), vec2(0.0,.375), norm)) {res = vec2(0.0, 0.375); bright = dark;}
+    else if (tri(vec2(0.5,0.125), vec2(0.5,0.5), vec2(0.0,.375), norm)) {res = vec2(0.0, 0.375); bright = dark;}
+    //3
+    else if (tri(vec2(1.0,0.0), vec2(1.0,.375), vec2(0.5,0.125), norm)) {res = vec2(1.0, 0.375);}
+    else if (tri(vec2(0.5,0.125), vec2(0.5,0.5), vec2(1.0,.375), norm)) {res = vec2(1.0, 0.375);}
+    //4
+    else if (tri(vec2(0.0,.375), vec2(0.0,.625), vec2(0.5,0.5), norm)) {res = vec2(0.0, 0.375); bright = light;}
+    //5
+    else if (tri(vec2(1.0,.375), vec2(1.0,.625), vec2(0.5,0.5), norm)) {res = vec2(1.0, 0.375); bright = light;}
+    //6
+    else if (tri(vec2(0.5,0.5), vec2(0.0,.625), vec2(0.0,1.0), norm)) {res = vec2(0.5, 0.875);}
+    else if (tri(vec2(0.0,1.0), vec2(0.5,0.875), vec2(0.5,0.5), norm)) {res = vec2(0.5, 0.875);}
+    //7
+    else if (tri(vec2(0.5,0.5), vec2(1.0,.625), vec2(1.0,1.0), norm)) {res = vec2(0.5, 0.875); bright = dark;}
+    else if (tri(vec2(1.0,1.0), vec2(0.5,0.875), vec2(0.5,0.5), norm)) {res = vec2(0.5, 0.875); bright = dark;}
+    //8
+    else if (tri(vec2(0.0,1.0), vec2(1.0,1.0), vec2(0.5,0.875), norm)) {res = vec2(0.5, 0.875); bright = light;}
+        
+    Return = vec4(0.0,0.0,0.0,0.0);
+    for(float i = -1.5; i<1.5; i+=1.0)
+    {
+        for (float j = -1.5; j<1.5; j+=1.0)
+        {
+            Return += clamp(Texture.sample(vec2(((floor(fragCoord.x/cellSize.x)+res.x)*cellSize.x+i)/iResolution.x,((floor(fragCoord.y/cellSize.y)+res.y)*cellSize.y+j)/iResolution.y
+                ) / zoom
+            )*bright, 0.0, 1.0);
+        }
+    }
+    Return = clamp(Return / 9.0, 0.0, 1.0);
+    
+    //vec2 uv = fragCoord.xy/iResolution.xy;
+    //uv.x = uv.x/(iChannelResolution[0].x/iChannelResolution[0].y)*(iResolution.x/iResolution.y);
+    
+    //Return = texture(Texture, uv);
+}
