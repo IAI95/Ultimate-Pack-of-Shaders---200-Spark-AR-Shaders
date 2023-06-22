@@ -1,0 +1,77 @@
+precision highp float;
+
+#define M_PI 3.1415926535897932384626433832795
+
+float map(float value, float min1, float max1, float min2, float max2)
+{
+    float perc = (value - min1) / (max1 - min1);
+    return perc * (max2 - min2) + min2;
+}
+
+float standardDeviation(vec3 colour)
+{
+    float mean = (colour.r + colour.g + colour.b) / 3.0;
+    float sum = (colour.r - mean) * (colour.r - mean) +
+        		(colour.g - mean) * (colour.g - mean) +
+        		(colour.b - mean) * (colour.b - mean);
+    
+    float mean_sum = sum / 3.0;
+    
+    return sqrt(mean_sum);
+}
+
+float grayPercentage(vec3 colour)
+{
+    return 1.0-standardDeviation(colour.rgb);  
+}
+
+float colourDistance(vec4 compare, vec4 to)
+{
+    return sqrt((to.r - compare.r) * (to.r - compare.r) +
+        	(to.g - compare.g) * (to.g - compare.g) +
+        	(to.b - compare.b) * (to.b - compare.b));
+}
+
+float heatDistortionIntensity(vec2 uvCoord, std::Texture2d Texture)
+{
+    
+    vec4 textureSample = Texture.sample(uvCoord);
+    float result = (1.0-uvCoord.y) * (1.0-uvCoord.y) * (1.0-uvCoord.y);
+    return map(result, 0.25, 1.0, 0.0, 0.5);
+    
+}
+
+float rand(vec2 co)
+{
+    float a = 12.9898;
+    float b = 78.233;
+    float c = 43758.5453;
+    float dt= dot(co.xy ,vec2(a,b));
+    float sn= mod(dt,3.14);
+    return fract(sin(sn) * c);
+}
+
+// @param[default=15.0, min=0.0, max=50.0] Waves
+// @param[default=40.0, min=0.0, max=50.0] Speed
+
+void mainImage( in float Waves, in float Speed, in std::Texture2d Texture, out vec4 Return )
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+    vec2 uv = 1.0 - fragCoord/iResolution.xy;
+    
+    float frequency = uv.y * 2.0 * M_PI * Waves;
+    float amplitude = 0.004 * heatDistortionIntensity(uv, Texture);
+    float phase = M_PI/4.0 + iTime * Speed;
+    float sine_range = sin(-phase + frequency) * amplitude;
+    
+    vec2 distort = vec2(sine_range,0.0);
+    
+    // Simple blur based on rand function
+    // Fast, but not the prettiest
+    vec2 blur = vec2(rand(1.0 - uv + vec2(iTime)) / 30.0 * heatDistortionIntensity(uv, Texture));
+    
+    // Output to screen
+    Return = Texture.sample(1.0 - uv + distort + blur);
+}

@@ -1,0 +1,49 @@
+precision highp float;
+
+// @param[default=2.0, min=0.0, max=5.0] BlowoutFactor
+// @param[default=0.04, min=0.0, max=1.0] DistortStrength
+// @param[default=-1.2, min=-3.0, max=3.0] XSpeed
+// @param[default=0.7, min=0.0, max=1.0] YSpeed
+// @param[default=1.0, min=0.0, max=1.0] Strength
+
+void mainImage( in float BlowoutFactor, in float DistortStrength, in float XSpeed, in float YSpeed, in float Strength, in std::Texture2d tex18, in std::Texture2d Texture, out vec4 Return )
+{
+
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+    vec2 uv = fragCoord.xy / iResolution.xy;
+    
+    //setup texture scaling and movement
+    float tex_x = mod( ((uv.x * 4.0) + (iTime * XSpeed)) , 1.0 );
+    float tex_y = mod( ((uv.y * 4.0) + (iTime * YSpeed)) , 1.0 );
+    
+    float tex1_x = mod( ((uv.x * 2.0) + (iTime * XSpeed)) , 1.0 );
+    float tex1_y = mod( ((uv.y * 2.0) + (iTime * YSpeed)) , 1.0 );
+    
+    float tex2_x = mod( ((uv.x * 1.0) + (iTime * XSpeed)) , 1.0 );
+    float tex2_y = mod( ((uv.y * 1.0) + (iTime * YSpeed)) , 1.0 );
+    
+    //get 3 layers of texture
+    float texColor  = tex18.sample(vec2(tex_x,tex_y) ).r;
+    float texColor1 = tex18.sample(vec2(tex1_x,tex1_y) ).r;
+    float texColor2 = tex18.sample(vec2(tex2_x,tex2_y) ).r;
+    
+    //mix texture layers  
+    float t = max( max(dot( texColor, 0.28), dot( texColor1, 0.34)), dot( texColor2, 0.34));
+  	t *= Strength;
+    
+    //set storm intensity as distort
+    float noise = smoothstep(0.11,0.45,t);
+    vec2 sceneNoise = uv + (vec2(noise*XSpeed,noise*YSpeed)*DistortStrength);
+    
+    //get scene
+    vec3 sceneColor = Texture.sample(sceneNoise).rgb;
+    
+    t *= BlowoutFactor;
+    
+    //mix colorized textures to scene
+    vec3 kir = mix(sceneColor, vec3(0.65, 0.52, 0.44), t);
+    Return = vec4(kir, 1.0);
+}

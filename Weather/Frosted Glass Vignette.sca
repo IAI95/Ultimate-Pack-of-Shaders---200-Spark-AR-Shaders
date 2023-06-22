@@ -1,0 +1,38 @@
+// Experiment: Frosted Glass II by Shadmar
+// Original by Jack Davenport : https://www.shadertoy.com/view/MtsSWs#
+
+precision highp float;
+
+float rand(vec2 uv) {
+ 
+    float a = dot(uv, vec2(92., 80.));
+    float b = dot(uv, vec2(41., 62.));
+    
+    float x = sin(a) + cos(b) * 51.;
+    return fract(x);
+}
+
+// @param[default=2.0, min=0.0, max=5.0] Frostyness
+// @param[default=1.0, min=0.0, max=5.0] Colorize
+// @param[default=#B3FFFFFF] Color
+
+void mainImage( in float Frostyness, in float Colorize, in vec4 Color, in std::Texture2d tex06, in std::Texture2d Texture, out vec4 Return )
+{
+
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+	vec2 uv = 1.0 - fragCoord.xy / iResolution.xy;
+    vec4 d = tex06.sample(uv);
+	vec2 rnd = vec2(rand(uv+d.r*.05), rand(uv+d.b*.05));
+    
+    //vignette
+    const vec2 lensRadius 	= vec2(0.65*1.5, 0.05);
+    float dist = distance(1.0 - uv.xy, vec2(0.5,0.5));
+    float vigfin = pow(1.-smoothstep(lensRadius.x, lensRadius.y, dist),2.);
+   
+    rnd *= .025*vigfin+d.rg*Frostyness*vigfin;
+    uv += rnd;
+    Return = mix(Texture.sample(1.0 - uv),vec4(Color),Colorize*vec4(rnd.r));
+}

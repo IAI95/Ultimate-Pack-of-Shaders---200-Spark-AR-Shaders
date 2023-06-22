@@ -1,0 +1,29 @@
+precision highp float;
+
+#define rnd(p,s)   fract(sin( ((p)+.01*(s)) *12.9898) * 43758.5453)
+
+// @param[default=0.005, min=0.0, max=0.1] Density
+// @param[default=0.1, min=0.0, max=1.0] Brightness
+// @param[default=10.0, min=0.0, max=20.0] BlurLength
+// @param[default=-500.0, min=0.0, max=-1000.0] Speed
+
+void mainImage( in float Density, in float Brightness, in float BlurLength, in float Speed, out vec4 Return )
+{
+  vec2 iResolution = std::getRenderTargetSize();
+  vec2 U = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+  float iTime = std::getTime();
+  
+    vec2 R = iResolution.xy;
+    U -= .5;
+    Return = vec4(1.0, 1.0, 1.0, 0.0);
+   
+    float Ny = Density * R.y;            // number of drop per column
+    for (float i=0.; i<=floor(Ny); i++)      // to deal with more than one drop per column
+    {    
+        float y = floor( mod( rnd(U.x,2.*i)*R.y -Speed*iTime, R.y) ); // drop altitude
+        if ( rnd(U.x,2.*i+1.) < (Ny-i) && abs( 1.0 - (U.y - y)) < BlurLength * 1.0-(U.y/R.x) )
+        Return += Brightness; //  / (U.x/R.x); // variant: keep total drop brightness. attention: saturated on the left 5% 
+    }
+    
+    Return = sqrt(Return);                              // gamma correction
+}
