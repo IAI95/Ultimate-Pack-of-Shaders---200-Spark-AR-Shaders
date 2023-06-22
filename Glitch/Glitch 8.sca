@@ -1,0 +1,31 @@
+#define value ScreenPan.x / std::getRenderTargetSize().x
+#define smoothen ScreenPan.y / std::getRenderTargetSize().y
+
+#define PI 3.1415
+
+float inOutSine(float x) {
+  return 0.5 - 0.5 * cos(x * PI);
+}
+
+float rand( vec2 n ) {
+  return fract(sin(dot(n.xy, vec2(12.9898, 78.233)))* 43758.5453);
+}
+
+float smoothRand(float x, float t) {
+  return mix(rand(vec2(floor(x), t)), rand(vec2(ceil(x), t)), inOutSine(fract(x)));
+}
+
+void mainImage( in vec2 ScreenPan, in std::Texture2d Texture, out vec4 Return )
+{
+
+  vec2 iResolution = std::getRenderTargetSize();
+  vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+  float iTime = std::getTime();
+
+  vec2 uv = fragCoord/iResolution.xy;
+
+  uv.x += smoothRand(uv.y * iResolution.y * smoothen, iTime / 10.0) * value;
+
+  vec3 col = Texture.sample(fract(uv)).rgb;
+  Return = vec4(col,1.0);
+}

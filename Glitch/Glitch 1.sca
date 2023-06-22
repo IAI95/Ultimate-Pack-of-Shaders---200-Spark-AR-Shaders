@@ -1,0 +1,71 @@
+precision highp float;
+
+//2D (returns 0 - 1)
+float random2d(vec2 n) 
+{ 
+  return fract(sin(dot(n, vec2(12.9898, 4.1414))) * 43758.5453);
+}
+
+float randomRange (in vec2 seed, in float min, in float max) 
+{
+  return min + random2d(seed) * (max - min);
+}
+
+// return 1 if v inside 1d range
+float insideRange(float v, float bottom, float top) 
+{
+ return step(bottom, v) - step(top, v);
+}
+
+// @param[default=0.1, min=0.0, max=0.3] AMT
+// @param[default=0.25, min=0.0, max=0.4] Speed
+
+void mainImage( in float AMT, in float Speed, in std::Texture2d Texture, out vec4 Return)
+{
+
+  vec2 iResolution = std::getRenderTargetSize();
+  vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+  float iTime = std::getTime();
+  
+  float time = floor(iTime * Speed * 60.0);    
+  vec2 uv = fragCoord.xy / iResolution.xy;
+  
+  //copy orig
+  vec3 outCol = Texture.sample(uv).rgb;
+  
+  //randomly offset slices horizontally
+  float maxOffset = AMT/2.0;
+  for (float i = 0.0; i < 10.0 * AMT; i += 1.0) 
+  {
+      float sliceY = random2d(vec2(time , 2345.0 + float(i)));
+      float sliceH = random2d(vec2(time , 9035.0 + float(i))) * 0.25;
+      float hOffset = randomRange(vec2(time , 9625.0 + float(i)), -maxOffset, maxOffset);
+      vec2 uvOff = uv;
+      uvOff.x += hOffset;
+      if (insideRange(uv.y, sliceY, fract(sliceY+sliceH)) == 1.0 )
+      {
+        outCol = Texture.sample( uvOff).rgb;
+      }
+  }
+  
+  //do slight offset on one entire channel
+  float maxColOffset = AMT/6.0;
+  float rnd = random2d(vec2(time , 9545.0));
+  vec2 colOffset = vec2(randomRange(vec2(time , 9545.0),-maxColOffset,maxColOffset), randomRange(vec2(time , 7205.0),-maxColOffset,maxColOffset));
+
+  if (rnd < 0.33)
+  {
+      outCol.r = Texture.sample( uv + colOffset).r;
+      
+  }
+  else if (rnd < 0.66)
+  {
+      outCol.g = Texture.sample(uv + colOffset).g;
+  }
+  else
+  {
+      outCol.b = Texture.sample(uv + colOffset).b;  
+  }
+     
+    Return = vec4(outCol, 1.0);
+}

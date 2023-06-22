@@ -1,0 +1,190 @@
+precision highp float;
+
+#define PI 3.14159265359
+#define TWO_PI 6.28318530718
+
+float rand(vec2 co){
+    return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453);
+}
+
+float noise (in vec2 st) {
+    vec2 i = floor(st);
+    vec2 f = fract(st);
+
+    // Four corners in 2D of a tile
+    float a = rand(i);
+    float b = rand(i + vec2(1.0, 0.0));
+    float c = rand(i + vec2(0.0, 1.0));
+    float d = rand(i + vec2(1.0, 1.0));
+
+    // Smooth Interpolation
+
+    // Cubic Hermine Curve.  Same as SmoothStep()
+    vec2 u = f*f*(3.0-2.0*f);
+    // u = smoothstep(0.,1.,f);
+
+    // Mix 4 coorners percentages
+    return mix(a, b, u.x) +
+            (c - a)* u.y * (1.0 - u.x) +
+            (d - b) * u.x * u.y;
+}
+
+
+float downsample(float v, float res){
+    if (res == 0.0) return 0.0;
+    return floor(v * res) / res;
+}
+
+float interval(float timeInInterval, float percentOfInterval)
+{
+  float iTime = std::getTime();
+    float n = (percentOfInterval - 0.45) / 0.05; 
+    return ((sign(sin(TWO_PI * iTime / timeInInterval) + percentOfInterval
+                 *(2.0 * (n - 1.0) / (n + 9.0)) ) + 1.0) / 2.0) * step(0.4, cos(rand(vec2(iTime))));
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// @param[default=0.1, min=0.0, max=1.0] NoiseIntensity
+// @param[default=#00cc66FF] RGB
+
+void mainImage( in float NoiseIntensity, in vec4 RGB, in std::Texture2d Texture, out vec4 Return )
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+    vec4 renderColor;
+    
+    // PARAMS
+    //------------------------------
+
+    vec2 touchPos = vec2(0.0, 0.0);
+
+    float randomDispersionEnable = 1.0; // Basically a bool ( 0.0 or 1.0 )
+    
+    float dispersionIntensity = 0.025; // Prev demo: 0.025
+    float dispersionInterval = 10.0;
+    float dispersionFreq = 2.5;
+    
+    // Horizontal Line Distortion Params
+    float randDistortIntensity = 0.5; // Prev demo: 0.5
+    float randDistortInterval = 5.0f;
+    float randDistortFreq = 0.25;
+    
+    float intensity = .0;	// Prev demo: 0.2
+    float lineResolution = 5.0;
+    float lineSpeed = 5.0;
+    float lineShift = .01;
+
+
+    intensity += randDistortIntensity * interval(randDistortInterval, randDistortFreq / randDistortInterval);
+    
+    // Scan params
+    float activeScanIntensity = .03; // Prev demo: 0.03
+    float activeScanInterval = 7.0;
+    float activeScanFreq = 0.25;
+    
+    float passiveScanIntensity = 0.02; // Prev demo: 0.04
+    
+    // Glitch block params 
+    float smallBlockEnable = 1.0; // bool
+    float smallBlockInterval = 3.0;
+    float smallBlockFreq = 0.3;
+    
+    float bigBlockEnable = 1.0; // bool
+    float bigBlockInterval = 11.0;
+    float bigBlockFreq = 1.0;
+    
+
+    
+	  /////////////////////////////////////////////
+    
+    
+    // LOGIC
+    //--------------------------------
+    // Normalized pixel coordinates (from 0 to 1)
+    vec2 uv = fragCoord/iResolution.xy;
+    
+    // Downsamplers
+    float yMod = downsample(uv.y, 50.0 * lineResolution);
+    float xMod = downsample(uv.x, 50.0 * lineResolution);
+    float yMod2 = uv.y * 250.0;
+    float xMod2 = uv.x * 250.0;
+    float yMod3 = downsample(uv.y, 50.0 * sin(iTime));
+    float xMod3 = downsample(uv.x, 50.0 * cos(iTime));
+    
+    float res = lineResolution * 50.0;
+    
+    // Glitch block and random scanning jitter
+    // -----------------------------
+    // Block 1 (small)
+    float blockTop = rand(vec2(floor(iTime * 9.0)));
+    float blockBottom = blockTop - clamp(rand(vec2(blockTop)), 0.01, 0.1);
+    float blockRight = rand(vec2(floor(iTime * 10.0)));
+    float blockLeft = blockRight - clamp(rand(vec2(blockRight)) / 10.0, 0.01, 0.1);
+    
+    float blockShift = step(blockBottom, uv.y) * step(uv.y, blockTop);
+    blockShift *= step(blockLeft, uv.x) * step(uv.x, blockRight) * step(1.0, smallBlockEnable) * interval(smallBlockInterval, smallBlockFreq / smallBlockInterval);
+    
+    uv.x = mix(uv.x, xMod3, step(1.0, blockShift));
+    uv.y = mix(uv.y, yMod3, step(1.0, blockShift));
+    
+
+    
+    // Random Scanning
+    float randomTop = rand(vec2(iTime));
+    float randomBottom = randomTop - 0.1;
+    float randomShift = step(randomBottom, uv.y) * step(uv.y, randomTop);
+    uv.x = mix(uv.x, uv.x + activeScanIntensity*rand(vec2(uv.x, iTime)) * interval(activeScanInterval, activeScanFreq / activeScanInterval) * cos(iTime), 
+               step(1.0, randomShift));
+    
+
+
+    
+    // Horizontal line distortion
+    // --------------------------
+    float sineMod = sin((downsample(rand(vec2(yMod)) * TWO_PI , 50.0 * lineResolution) * 80.0 + iTime * rand(vec2(yMod, yMod)) * lineSpeed) );
+    float cosineMod = cos((downsample(rand(vec2(yMod)) * TWO_PI, 25. * lineResolution) * 80. + iTime * rand(vec2(yMod, yMod)) *lineSpeed) );
+    float cosineMod2 = cos((downsample(rand(vec2(xMod, yMod)) * TWO_PI, res) * 80. + iTime * rand(vec2(xMod, yMod)) *lineSpeed * 100.0) );
+
+    uv.x += (sineMod + cosineMod) * lineShift * intensity;
+
+
+ 	// Glitch block
+    // ------------------------
+    // Block 2 (large)
+    float blockTop2 = clamp( rand(vec2(floor(iTime * 2.0)))+ 0.3, 0.4, 1.0);
+    float blockBottom2 = clamp(blockTop2 - rand(vec2(blockTop2)) - 0.2, 0.0, 0.6);
+    float blockRight2 = clamp(rand(vec2(floor(iTime * 2.0), touchPos.x)) + 0.2, 0.5, 0.8);
+    float blockLeft2 = clamp(blockRight2 - rand(vec2(blockRight2)) - 0.2, 0.2, 0.5);
+    float blockShift2 = step(blockBottom2, uv.y) * step(uv.y, blockTop2);
+    blockShift2 *= step(blockLeft2, uv.x) * step(uv.x, blockRight2) * step(1.0, bigBlockEnable)* interval(bigBlockInterval, bigBlockFreq / bigBlockInterval);
+    
+    uv.x = mix(uv.x, mix(uv.x, uv.x + 0.02 + (cosineMod2) * lineShift * intensity * 5.0, yMod3) + step(0.7, sin(iTime * TWO_PI / 4.0)) * 0.1, step(1.0, blockShift2));
+    uv.y = mix(uv.y, uv.y + 0.05, step(1.0, blockShift2));
+
+    
+    
+    float colorOffset =  mix(1.0, (rand(vec2(iTime))-0.5) * 2.0 * sin(iTime * TWO_PI), step(1.0, randomDispersionEnable)) * dispersionIntensity * interval(dispersionInterval, dispersionFreq / dispersionInterval);
+  
+    float scan = 1.0 - sin(uv.y * 6000.0 * rand(vec2(iTime))) * passiveScanIntensity;
+    
+    float noiseMod = (0.5 + 0.5 * noise(vec2(rand(vec2(iTime)), rand(vec2(iTime * 10.0))) * 100.0 + vec2(xMod2, yMod2) )) * NoiseIntensity;
+        //(2.0 * atan(1.0 * iTime * iTime) / PI);0
+    
+    //float fade = (2.0 * atan(1.0 * iTime * iTime) / PI);
+    
+    ///////////////////////////////////////////////////////////////
+    
+    
+    renderColor =  Texture.sample( uv);
+    
+	vec4 red =  Texture.sample( vec2(uv.x + colorOffset * RGB.x, uv.y)) * vec4(1.0, 0.0, 0.0,1.0);
+	vec4 green =  Texture.sample( vec2(uv.x + colorOffset * RGB.y, uv.y))
+		 * vec4(0.0, 1.00, 0.0,1.0);
+	vec4 blue  =  Texture.sample( vec2(uv.x + colorOffset * RGB.z, uv.y)) * vec4(0.0, 0.0, 1.0,1.0);
+    
+    // Output to screen
+    Return = ((renderColor + (red + green + blue)) / 2.0) * scan - noiseMod;
+}
