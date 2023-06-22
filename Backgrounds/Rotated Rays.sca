@@ -1,0 +1,35 @@
+// rotated rays background by Andrey A. Ugolnik
+// based on inigo quilez shader.
+// 2015
+
+precision highp float;
+
+// @param[default=0.0, min=0.0, max=5.0] Smoothness
+// @param[default=15.0, min=0.0, max=30.0] RaysCount
+// @param[default=#99b2FFFF] Color1
+// @param[default=#6680FFFF] Color2
+
+void mainImage( in float Smoothness, in float RaysCount, in vec4 Color1, in vec4 Color2, out vec4 Return )
+{
+
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+
+	vec2 p = (-iResolution.xy + 2.0 * fragCoord.xy) / iResolution.y;
+
+    // background
+	vec2 q = vec2(atan(p.y, p.x), length(p));
+	float f = smoothstep(-Smoothness, Smoothness, sin(q.x * floor(RaysCount) + -iTime));
+	vec4 col = mix(Color1, Color2, f);
+    Return = vec4(col);
+
+    /*
+    // mix with texture
+    vec2 uv = fragCoord.xy / iResolution.xy;
+    vec4 tc = iChannel0.sample(uv);
+    Return = mix(tc, vec4(col), 0.7);
+    */
+    
+}

@@ -1,0 +1,40 @@
+precision highp float;
+
+float text( std::Texture2d tex13, std::Texture2d tex16 )
+{
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    vec2 iResolution = std::getRenderTargetSize();
+    float iTime = std::getTime();
+
+    vec2 uv = mod(fragCoord.xy, 16.0) * 0.0625;
+    vec2 block = fragCoord * 0.0625 - uv;
+    uv = uv * 0.8 + 0.1; // scale the letters up a bit
+    uv += floor(tex16.sample(block/iResolution.xy + iTime * .0005).xy * 16.0); // randomize letters
+    uv *= 0.0625; // bring back into 0-1 range
+    uv.x = -uv.x; // flip letters horizontally
+    return tex13.sample(uv).r;
+}
+
+vec4 rain(vec4 Color, float Speed)
+{
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    vec2 iResolution = std::getRenderTargetSize();
+    float iTime = std::getTime();
+
+	fragCoord.x -= mod(fragCoord.x, 16.0);
+    //fragCoord.y -= mod(fragCoord.y, 16.);
+    
+    float offset = sin(fragCoord.x * 15.0);
+    float speed = cos(fragCoord.x * 3.0) * 0.05 + Speed; 
+   
+    float y = fract(fragCoord.y/iResolution.y + iTime * speed + offset);
+    return vec4(Color) / (y*20.); //color
+}
+
+// @param[default=#1AFF59FF] Color
+// @param[default=0.2, min=0.1, max=0.5] Speed
+
+void mainImage( in float Speed, in vec4 Color, std::Texture2d tex13, std::Texture2d tex16, out vec4 Return )
+{
+    Return = vec4( text(tex13, tex16) * rain(Color, Speed) + vec4(0.0, 0.0, 0.0, 1.0) );
+}

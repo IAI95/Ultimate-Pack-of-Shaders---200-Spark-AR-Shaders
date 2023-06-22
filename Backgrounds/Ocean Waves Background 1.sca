@@ -1,0 +1,195 @@
+/*
+ * License Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.
+ */
+
+// Color computation inspired by: https://www.shadertoy.com/view/Ms2SD1
+
+// Computes normal analytical for improved precision
+precision highp float;
+#define PI  3.141592654
+#define TAU (2.0*PI)
+
+const float gravity = 1.0;
+const float waterTension = 0.01;
+
+const vec3 skyCol1 = vec3(0.6, 0.35, 0.3);
+const vec3 skyCol2 = vec3(1.0, 0.3, 0.3);
+const vec3 sunCol1 =  vec3(1.0,0.5,0.4);
+const vec3 sunCol2 =  vec3(1.0,0.8,0.7);
+const vec3 seaCol1 = vec3(0.1,0.2,0.2);
+const vec3 seaCol2 = vec3(0.8,0.9,0.6);
+
+vec2 wave(in float t, in float a, in float w, in float p) {
+  float x = t;
+  float y = a*sin(t*w + p);
+  return vec2(x, y);
+}
+
+vec2 dwave(in float t, in float a, in float w, in float p) {
+  float dx = 1.0;
+  float dy = a*w*cos(t*w + p);
+  return vec2(dx, dy);
+}
+
+vec2 gravityWave(in float t, in float a, in float k, in float h) {
+  float iTime = std::getTime();
+  float w = sqrt(gravity*k*tan(k*h));
+  return wave(t, a ,k, w*iTime);
+}
+
+vec2 capillaryWave(in float t, in float a, in float k, in float h) {
+  float iTime = std::getTime();
+  float w = sqrt((gravity*k + waterTension*k*k*k)*tan(k*h));
+  return wave(t, a, k, w*iTime);
+}
+
+vec2 gravityWaveD(in float t, in float a, in float k, in float h) {
+  float iTime = std::getTime();
+  float w = sqrt(gravity*k*tan(k*h));
+  return dwave(t, a, k, w*iTime);
+}
+
+vec2 capillaryWaveD(in float t, in float a, in float k, in float h) {
+  float iTime = std::getTime();
+  float w = sqrt((gravity*k + waterTension*k*k*k)*tan(k*h));
+  return dwave(t, a, k, w*iTime);
+}
+
+mat2 mrot(in float a) {
+  float c = cos(a);
+  float s = sin(a);
+  return mat2(c, s, -s, c);
+}
+
+mat2 mtrans(in mat2 m) {
+  return mat2(m[0][0], m[1][0], m[0][1], m[1][1]);
+}
+
+vec4 sea(in vec2 p, in float ia) {
+  float y = 0.0;
+  vec3 d = vec3(0.0);
+
+  float k = 1.0;
+  float kk = 1.3;
+  float a = ia*0.19;
+  float aa = 1.0/(kk*kk);
+
+  float h = 10.0;
+  p *= 0.5;
+  
+  float angle = 0.0;
+
+  for (int i = 0; i < 3; ++i) {
+    mat2 fr = mrot(angle);
+    mat2 rr = mtrans(fr);
+    vec2 pp = fr*p;
+    y += gravityWave(pp.y + float(i), a, k, h).y;
+    vec2 dw = gravityWaveD(pp.y + float(i), a, k, h);
+    
+    vec2 d2 = vec2(0.0, dw.x);
+    vec2 rd2 = rr*d2;
+    
+    d += vec3(rd2.x, dw.y, rd2.y);
+
+    angle += float(i);
+    k *= kk;
+    a *= aa;
+  }
+
+  for (int i = 3; i < 7; ++i) {
+    mat2 fr = mrot(angle);
+    mat2 rr = mtrans(fr);
+    vec2 pp = fr*p;
+    y += capillaryWave(pp.y + float(i), a, k, h).y;
+    vec2 dw = capillaryWaveD(pp.y + float(i), a, k, h);
+    
+    vec2 d2 = vec2(0.0, dw.x);
+    vec2 rd2 = rr*d2;
+    
+    d += vec3(rd2.x, dw.y, rd2.y);
+
+    angle += float(i);
+    k *= kk;
+    a *= aa;
+  }
+  
+  vec3 t = normalize(d);
+  vec3 nxz = normalize(vec3(t.z, 0.0, -t.x));
+  vec3 nor = cross(t, nxz);
+
+  return vec4(y, nor);
+}
+
+vec3 sunDirection() {
+  vec3 dir = normalize(vec3(0, 0.13, 1));
+  return dir;
+}
+
+vec3 skyColor(vec3 rd) {
+  vec3 sunDir = sunDirection();
+
+  float sunDot = max(dot(rd, sunDir), 0.0);
+  
+  vec3 final = vec3(0.0);
+
+  final += mix(skyCol1, skyCol2, rd.y);
+
+  final += 0.5*sunCol1*pow(sunDot, 30.0);
+
+  final += 4.0*sunCol2*pow(sunDot, 300.0);
+    
+  return final;
+}
+
+void mainImage( out vec4 Return )
+{
+
+  vec2 iResolution = std::getRenderTargetSize();
+  vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+  float iTime = std::getTime();
+
+  vec2 q = 1.0 - fragCoord.xy/iResolution.xy; 
+  vec2 p = -1.0 + 2.0*q;
+  p.x *= iResolution.x/iResolution.y;
+
+  vec3 ro = vec3(0.0, 10.0, 0.0);
+  vec3 ww = normalize(vec3(0.0, -0.1, 1.0));
+  vec3 uu = normalize(cross( vec3(0.0,1.0,0.0), ww));
+  vec3 vv = normalize(cross(ww,uu));
+  vec3 rd = normalize(p.x*uu + p.y*vv + 2.5*ww);
+
+  vec3 col = vec3(0.0);
+
+  float dsea = (0.0 - ro.y)/rd.y;
+  
+  vec3 sunDir = sunDirection();
+  
+  vec3 sky = skyColor(rd);
+  
+  if (dsea > 0.0) {
+    vec3 p = ro + dsea*rd;
+    vec4 s = sea(p.xz, 1.0);
+    float h = s.x;    
+    vec3 nor = s.yzw;
+    nor = mix(nor, vec3(0.0, 1.0, 0.0), smoothstep(0.0, 200.0, dsea));
+
+    float fre = clamp(1.0 - dot(-nor,rd), 0.0, 1.0);
+    fre = pow(fre, 3.0);
+    float dif = mix(0.25, 1.0, max(dot(nor,sunDir), 0.0));
+    
+    vec3 refl = skyColor(reflect(rd, nor));
+    vec3 refr = seaCol1 + dif*sunCol1*seaCol2*0.1; 
+    
+    col = mix(refr, 0.9*refl, fre);
+    
+    float atten = max(1.0  * 0.001, 0.0);
+    col += seaCol2*(p.y - h) * 2.0 * atten;
+    
+    col = mix(col, sky, 1.0 - exp(-0.01*dsea));
+    
+  } else {
+    col = sky;
+  }
+
+  Return = vec4(col,1.0);
+}

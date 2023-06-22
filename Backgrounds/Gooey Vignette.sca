@@ -1,0 +1,61 @@
+
+// GooFunc - now with technical parameters for you to play with :)
+float GooFunc(vec2 uv,float Zoom,float Distortion, float Gooeyness,float Wibble)
+{
+    float iTime = std::getTime();
+    float s = sin(iTime*0.1);
+    float s2 = 0.5+sin(iTime*1.8);
+    vec2 d = uv*(Distortion+s*.3);
+    d.x += iTime*0.25+sin(d.x+d.y + iTime*0.3)*Wibble;
+    d.y += iTime*0.25+sin(d.x + iTime*0.3)*Wibble;
+    float v1=length(0.5-fract(d.xy))+Gooeyness;
+    d = (1.0-Zoom)*0.5+(uv*Zoom);					// try removing this :)
+    float v2=length(0.5-fract(d.xy));
+    v1 *= 1.0-v2*v1;
+    v1 = v1*v1*v1;
+    v1 *= 1.9+s2*0.2;
+    return v1;
+}
+ 
+// @param[default=4.0, min=0.0, max=10.0] Distortion      // increase or decrease to suit your taste.
+// @param[default=0.7, min=0.5, max=1.1] Zoom             // Zoom value
+// @param[default=0.95, min=0.8, max=2.0] Gooeyness       // smaller = more gooey bits
+// @param[default=0.5, min=0.0, max=2.0] Wibble           // tweak the Wibble!
+// @param[default=2.4, min=0.0, max=5.0] Saturation
+// @param[default=#80E64DFF] Color
+
+void mainImage( in float Distortion, in float Zoom, in float Gooeyness, in float Wibble, in float Saturation, in vec4 Color, in std::Texture2d Texture, out vec4 Return )
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 p = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+    vec2 uv = p.xy / iResolution.xy;
+										
+    float goo = GooFunc(uv, Zoom, Distortion, Gooeyness,Wibble);
+    
+    const vec4 col1 = vec4(0.0, 0.0, 0.0, 1.0);
+    Return = mix(Color,col1,goo)*Saturation;
+
+    vec4 background = Texture.sample(uv);
+
+    // press mouse for grid background.
+    vec3 iMouse = vec3(0.0);
+    if (iMouse.z>0.5)
+    {
+        float f = mod( floor(12.0*uv.x) + floor(12.0*uv.y), 2.0);
+        background = vec4(0.3 + 0.5*f*1.0);
+    }
+
+    float avg = max(max(Return.r,Return.g),Return.b);		//float avg = k.g;	//(k.r+k.g+k.b)/3.0;
+    float alpha=1.0;
+    if (avg<=0.4)
+    {
+        // darken & alpha edge of goo...
+        avg = clamp(avg,0.0,1.0);
+        Return*=avg+0.2;						// 0.0 = black edges
+        alpha = clamp((avg*avg)*5.5,0.0,1.0);
+    }
+
+    // blend goo + background based on the Alpha
+    Return = mix(background,Return,alpha);
+}

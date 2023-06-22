@@ -1,0 +1,98 @@
+// Thanks iq for this tutorial!
+
+//大概思想就是把屏幕分成若干相等网格，每个网格取一个随机点作为连接处，通过Line函数连接点，并画出线。
+//原教程链接：https://www.youtube.com/watch?v=3CycKKJiwis
+
+precision highp float;
+
+#define S(a,b,t) smoothstep(a,b,t)
+
+float DistLine(vec2 p,vec2 a,vec2 b){
+	vec2 pa = p-a;
+    vec2 ba = b-a;
+    float t = clamp(dot(pa,ba) / dot(ba,ba),0.,1.);
+    return length(pa - ba * t);
+}
+
+float N21(vec2 p){
+	p = fract(p * vec2(233.34,851.73));
+    p += dot(p, p + 23.45);
+    return fract(p.x * p.y);
+}
+
+vec2 N22(vec2 p){
+	float n =N21(p);
+    return vec2(n,N21(p+n));
+    
+}
+
+vec2 GetPos(vec2 id,vec2 offs){
+  float iTime = std::getTime();
+      
+    
+    vec2 n = N22(id + offs) * iTime;
+    
+    return offs + sin(n) * .4;
+}
+
+float Line(vec2 p,vec2 a,vec2 b){
+	float d = DistLine(p,a,b);
+    float m = S(.03,.01,d);
+    
+    m *= S(1.2,.8,length(a - b));
+    
+    return m;
+}
+
+void mainImage( out vec4 Return )
+{
+
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+    vec2 uv = (fragCoord - .5 * iResolution.yy) / iResolution.x;
+
+    float m = 0.;
+    
+    uv *= 5.;
+    
+    vec2 gv = fract(uv) - .5;
+    vec2 id = floor(uv);
+    
+
+    
+    vec2 p[9];
+    int i = 0;
+    for(float y = -1.;y <= 1.; y++){
+        for(float x = -1.;x <= 1.; x++){
+        	p[i++] = GetPos(id,vec2(x,y));
+				
+        }
+    }
+    
+    //控制连接处闪耀
+    float t = iTime * 10.;
+    for(int i=0;i<9;i++){
+        
+    	m += Line(gv,p[4],p[i]);
+        
+        vec2 j = (p[i] - gv) * 20.;
+        float sparkle = 1. / dot(j,j);
+        
+        m+=sparkle * (sin(t + p[i].x * 10.) * .5 + .5);
+            
+    }
+    
+    m += Line(gv,p[1],p[3]);
+    m += Line(gv,p[1],p[5]);
+    m += Line(gv,p[7],p[3]);
+    m += Line(gv,p[7],p[5]);
+    
+    vec3 col = vec3(m);
+   
+    //网格线
+    //if(gv.x > .48 || gv.y >.48) col = vec3(1,0,0);    
+    
+    Return = vec4(col,1.0);
+}

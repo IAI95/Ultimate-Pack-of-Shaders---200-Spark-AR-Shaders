@@ -1,0 +1,141 @@
+// First attempt at a Synthwave Road
+// ... using 2D techniques
+
+precision highp float;
+
+const vec2 sunPos = vec2(0, 0.1);
+const vec3 sunsetUp = vec3(1., 0.59, 0.32);
+const vec3 sunsetDown = vec3(0.58, 0.11, 0.44);
+const vec3 sunUp = vec3(1, 0.9, 0);
+const vec3 sunDown = vec3(0.75, 0.21, 0.44);
+const vec3 gridColor = vec3(0.8, 0.5, 0.75);
+const vec3 gridColor2 = vec3(0.59, 0.05, 0.45);
+const vec3 groundColor = vec3(0.24, 0.11, 0.26);
+const vec3 roadColor = vec3(0.05, 0.05, 0.05);
+const vec3 roadColor2 = vec3(0.1, 0.1, 0.1);
+const vec3 paintColor = vec3(0.05, 0.05, 0.05);
+const vec3 paintColor2 = vec3(1, 1, 0.33);
+const vec3 centerLineColor = vec3(1, 1, 0.33);
+const vec3 buildingsColor = vec3(0, 0, 0);
+
+#define hash21(p) fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453)
+
+vec4 sky(vec2 p, float sunDistortFactor, float sunStripeSpeed, float sunStripeOffset, float horizonY, float sunStripe, float sunSize, float buildingsScrollSpeed, float bendingRate, float buildingsWidthFactor, float buildingsHeight)
+{    
+    float iTime = std::getTime();
+    vec2 sunDistort = vec2(sin(60. * p.y + iTime * 2.) * sunDistortFactor);
+    float sun = length(p + sunDistort - sunPos);
+    vec3 skyColor = mix(sunsetDown, sunsetUp, p.y);
+
+    sunStripe = mod(iTime * sunStripeSpeed + sunStripeOffset + (p.y - horizonY) * (p.y - horizonY), sunStripe);
+    vec3 ret = (sun < sunSize) && sunStripe > 0.01 ? mix(sunDown, sunUp, (p.y + sunPos.y) / sunSize) : skyColor;
+    
+    float scroll = buildingsScrollSpeed * cos(bendingRate * iTime);
+    float height = hash21(floor(scroll + p.xx * buildingsWidthFactor)) * buildingsHeight;
+    ret = p.y - horizonY < height ? buildingsColor : ret;
+    
+    return vec4(ret, 1.);
+}
+
+vec4 road(vec2 p, float roadScale, float horizonY, float zoom, float bendingRate, float roadDetail, float speed, float roadWidth, float gridLineWidth, float sideLineWidth, float centerWidth)
+{
+    vec3 q = vec3(p, 1) / (roadScale - p.y);
+
+    float refl = 0.8 * (1. - abs(p.y - horizonY));
+    refl = refl * refl * refl;
+    float iTime = std::getTime();
+    float k = zoom * sin(bendingRate * iTime);
+    float bendFactor = k * q.z * q.z;
+
+    float w = abs(q.x + bendFactor);
+    float road = sin(roadDetail * q.z + speed * iTime);
+
+    vec3 c;
+
+    if (w > roadWidth) {
+        bool vGrid = mod(w - roadWidth, 1.) > (1. - gridLineWidth);
+        bool hGrid = (road < 0. && road > -gridLineWidth * 3.);
+        
+        vec3 grid = (vGrid || hGrid) ? mix(gridColor, gridColor2, refl) : groundColor;
+        float blend = 1. - abs(p.y - horizonY);
+        c = mix(grid, groundColor, blend * blend);
+    }
+    else {
+        if (road > 0.) {
+            vec3 Return = w > (roadWidth - sideLineWidth) ? paintColor : roadColor;
+            c = Return;
+        }
+        else {        
+            vec3 Return = w > (roadWidth - sideLineWidth) ? paintColor2 : (w > (centerWidth * 0.5) ? roadColor2 : centerLineColor);   
+            c = Return;
+        } 
+        
+        vec4 invSky = sky(-p + vec2(sin(30. * p.y + iTime * 2.) * 0.01, horizonY), roadScale, horizonY, zoom, bendingRate, roadDetail, speed, roadWidth, gridLineWidth, sideLineWidth, centerWidth);
+        c.rgb = (invSky.rgb * refl) + c.rgb * (1. - refl);
+    }
+    
+    float d = abs(w - roadWidth);
+    d = min(d, w);    
+    d = max(d, road);
+    
+    return vec4(c, d);
+}
+
+vec3 scene(float sunDistortFactor, float sunStripeSpeed, float sunStripeOffset, float horizonY, float sunStripe, float sunSize, float buildingsScrollSpeed, float bendingRate, float buildingsWidthFactor, float buildingsHeight, float glowRadius, float glowIntensity, float glowColorFactor, float roadScale, float zoom, float roadDetail, float speed, float roadWidth, float gridLineWidth, float sideLineWidth, float centerWidth)
+{
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    vec2 iResolution = std::getRenderTargetSize();
+
+    vec2 normFragCoord = ((vec2(fragCoord.x, 1.0 - fragCoord.y) - 0.5 * vec2(iResolution.x, 1.0 - iResolution.y)) / iResolution.yy) * 2.;
+    
+    vec4 c;
+    vec3 glowColor;
+    
+    if (normFragCoord.y > horizonY) {
+        c = sky(normFragCoord, sunDistortFactor, sunStripeSpeed, sunStripeOffset, horizonY, sunStripe, sunSize, buildingsScrollSpeed, bendingRate, buildingsWidthFactor, buildingsHeight);
+    }
+    else {
+        vec4 skyColor = sky(normFragCoord, sunDistortFactor, sunStripeSpeed, sunStripeOffset, horizonY, sunStripe, sunSize, buildingsScrollSpeed, bendingRate, buildingsWidthFactor, buildingsHeight);
+        vec4 roadColor = road(normFragCoord, roadScale, horizonY, zoom, bendingRate, roadDetail, speed, roadWidth, gridLineWidth, sideLineWidth, centerWidth);
+    
+        c = roadColor;
+        glowColor = skyColor.a < roadColor.a ? sunDown : paintColor2;
+        c.a = min(skyColor.a, roadColor.a);
+        
+        c.rgb = roadColor.rgb;
+        
+        float glow = pow(glowRadius / c.a, glowIntensity);
+        c.rgb += glow * glowColor * glowColorFactor;
+    }
+    
+    return c.rgb;
+    //return 1. - c.aaa;
+}
+
+// @param[default=0.4, min=0.0, max=1.0] sunSize
+// @param[default=0.05, min=0.0125, max=0.5] sunStripe
+// @param[default=0.04, min=0.0125, max=0.5] sunStripeOffset
+// @param[default=0.002, min=0.00125, max=0.005] sunDistortFactor
+// @param[default=0.02, min=0.0125, max=0.05] sunStripeSpeed
+// @param[default=-0.24, min=-0.5, max=0.5] horizonY
+// @param[default=-0.2, min=-0.5, max=0.5] roadScale
+// @param[default=20.0, min=0.0, max=50.0] speed
+// @param[default=0.0, min=0.0, max=1.0] bendingRate
+// @param[default=2.8, min=0.5, max=5.0] roadWidth
+// @param[default=4.0, min=2.0, max=10.0] roadDetail
+// @param[default=0.05, min=0.0125, max=0.005] zoom
+// @param[default=0.0, min=0.0, max=50.0] buildingsScrollSpeed
+// @param[default=0.15, min=0.0, max=1.0] buildingsHeight
+// @param[default=25.0, min=0.0, max=100.0] buildingsWidthFactor
+// @param[default=0.2, min=0.0, max=1.0] sideLineWidth
+// @param[default=0.15, min=0.0, max=1.0] centerWidth
+// @param[default=0.0, min=0.0, max=1.0] gridLineWidth
+// @param[default=1.2, min=1.0, max=5.0] glowIntensity
+// @param[default=0.1, min=0.0, max=1.0] glowRadius
+// @param[default=0.4, min=0.0, max=1.0] glowColorFactor
+
+void mainImage( in float sunSize, in float sunStripe, in float sunStripeOffset, in float sunDistortFactor, in float sunStripeSpeed, in float horizonY, in float roadScale, in float speed, in float bendingRate, in float roadWidth, in float roadDetail, in float zoom, in float buildingsScrollSpeed, in float buildingsHeight, in float buildingsWidthFactor, in float sideLineWidth, in float centerWidth, in float gridLineWidth, in float glowIntensity, in float glowRadius, in float glowColorFactor, out vec4 Return )
+{
+    vec3 c = scene(sunDistortFactor, sunStripeSpeed, sunStripeOffset, horizonY, sunStripe, sunSize, buildingsScrollSpeed, bendingRate, buildingsWidthFactor, buildingsHeight, glowRadius, glowIntensity, glowColorFactor, roadScale, zoom, roadDetail, speed, roadWidth, gridLineWidth, sideLineWidth, centerWidth);
+    Return = vec4(c, 1.0);
+}
