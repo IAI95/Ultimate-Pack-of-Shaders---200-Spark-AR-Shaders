@@ -1,0 +1,20 @@
+precision highp float;
+
+void vignette( inout vec3 color, vec2 uv, float adjust )
+{
+    color.rgb -= max((distance(uv, vec2(0.5, 0.5)) - 0.25) * 1.25 * adjust, 0.0);
+}
+
+// @param[default=1.0, min=0.0, max=2.0] Strength
+
+void mainImage( in float Strength, in std::Texture2d Texture, out vec4 Return )
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+	vec2 uv = fragCoord.xy / iResolution.xy;
+    vec3 color = Texture.sample(uv).rgb;
+    vignette(color, uv, Strength);
+	Return = vec4(color, 1.0);
+}

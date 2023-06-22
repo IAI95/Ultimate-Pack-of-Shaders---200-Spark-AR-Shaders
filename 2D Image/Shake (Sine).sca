@@ -1,0 +1,39 @@
+precision highp float;
+
+// @param[default=8.0, min=0.0, max=20.0] Shakefrequency             // Number of shakes
+// @param[default=0.02, min=0.0, max=0.1] ShakeSize                  // How much it shakes, as a proportion of the screen size
+// @param[default=2.0, min=0.0, max=10.0] TransmissionFrequency      // Number of sideways shakes
+// @param[default=0.5, min=0.0, max=5.0] TransmissionSize            // How much sideways shake there is, as a proportion of the main shake
+// @param[default=2.0, min=0.0, max=10.0] ShakeOften                 // Time between shakes, in seconds
+// @param[default=0.5, min=0.0, max=5.0] ShakeDuration               // Length of a shake, in seconds
+
+void mainImage( in float Shakefrequency, in float ShakeSize, in float TransmissionFrequency, in float TransmissionSize, in float ShakeOften, in float ShakeDuration, in std::Texture2d Texture, out vec4 Return )
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+    vec2 shake_direction = normalize(vec2(0.0, 1.0));	// Direction in which the shaking occurs
+
+    // Normalized pixel coordinates (from 0 to 1)
+    vec2 uv = fragCoord / iResolution.xy;
+    // Zoom in slightly so that there's room to not wrap
+    uv -= 0.5;
+    uv *= (1.0 - 2.0 * max(ShakeSize, TransmissionSize * ShakeSize));
+    uv += 0.5;
+    float t = clamp(mod(iTime, ShakeOften), 0.0, ShakeDuration) / ShakeDuration;
+    
+    float shake_magnitude = ShakeSize * sin(Shakefrequency * 2.0*3.14159*t) * (t+0.5)*t*t*(t-1.0)*(t-1.0)*15.5;
+    uv += shake_direction * shake_magnitude;
+    
+    // A little sideways shake, for flavor
+    vec2 shake_transverse = vec2(-shake_direction.y, shake_direction.x);
+    float trans_magnitude = TransmissionSize * ShakeSize * sin(TransmissionFrequency * 2.*3.14159*t) * -t*(t-1.);
+    uv += trans_magnitude * shake_transverse;
+
+    // Time varying pixel color
+    vec4 col = Texture.sample(uv);
+
+    // Output to screen
+    Return = col;
+}

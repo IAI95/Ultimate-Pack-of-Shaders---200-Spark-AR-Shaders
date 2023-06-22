@@ -1,0 +1,30 @@
+precision highp float;
+
+float man_dist_to_nearest_wall(vec2 uv)
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    float aspect = (iResolution.y/iResolution.x);
+    float x_distance = uv.x < 1.0 - uv.x ? uv.x : 1.0 - uv.x;
+    float y_distance = uv.y * aspect < (1.0 - uv.y) * aspect ? uv.y * aspect: (1.0 - uv.y) * aspect;
+    return min(x_distance, y_distance);
+}
+
+// @param[default=0.1, min=0.0, max=2.0] Offset
+
+void mainImage( in float Offset, in std::Texture2d Texture, out vec4 Return )
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+	vec2 texCoords = fragCoord.xy / iResolution.xy;//should be set from vertex shader in production
+    vec4 texColor = Texture.sample(texCoords);
+  
+    float dist = man_dist_to_nearest_wall (texCoords);
+    float dist_s = smoothstep( Offset*.05, Offset*.95, dist);
+ 
+    texColor *= dist_s;// should be texColor.a *= dist_s; for production
+    
+    
+	Return = texColor;
+}

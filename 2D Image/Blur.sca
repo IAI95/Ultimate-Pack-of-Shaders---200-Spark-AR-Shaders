@@ -1,0 +1,38 @@
+precision highp float;
+
+void srand(vec2 a, out float r)
+{
+	r=sin(dot(a,vec2(1233.224,1743.335)));
+}
+
+float rand(inout float r)
+{
+	r=fract(3712.65*r+0.61432);
+	return (r-0.5)*2.0;
+}
+
+// @param[default=5.0, min=0.0, max=10.0] Amount
+
+void mainImage( in float Amount, in std::Texture2d Texture, out vec4 Return )
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+    int ITER = 32;
+
+	vec2 uv = fragCoord.xy / iResolution.xy;
+	float p=Amount/iResolution.y;
+	vec4 c=vec4(0.0);
+	float r;
+	srand(uv, r);
+	vec2 rv;
+	
+	for(int i=0;i<ITER;i++)
+	{
+		rv.x=rand(r);
+		rv.y=rand(r);
+		c+=Texture.sample(uv+rv*p)/float(ITER);
+	}
+	Return = c;
+}

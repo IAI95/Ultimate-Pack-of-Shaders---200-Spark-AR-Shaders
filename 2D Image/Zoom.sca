@@ -1,0 +1,23 @@
+precision highp float;
+
+// @param[default=0.0, min=0.0, max=5.0] Zoom
+
+void mainImage( in float Zoom, in vec2 Coordinate, std::Texture2d Texture, out vec4 Return )
+{
+
+	vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+    float zoomAmount = Zoom + 1.0;
+    
+    //Coordinate = Coordinate + iResolution / 2.0;
+
+    vec2 pos = Coordinate.xy / iResolution.xy;
+    
+	vec2 UV = fragCoord.xy / iResolution.xy;
+    vec2 textureXY = UV/zoomAmount + pos;
+    textureXY -= pos/zoomAmount;
+    vec4 sampleRGBA = Texture.sample(textureXY);
+	Return = sampleRGBA;
+}

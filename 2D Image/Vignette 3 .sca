@@ -1,0 +1,33 @@
+precision highp float;
+
+// @param[default=0.5, min= 0.0, max=3.0] InnerVig
+// @param[default=1.2, min= 0.0, max=3.0] OuterVig
+// @param[default=1.5, min= 0.0, max=3.0] Red
+// @param[default=0.0, min= 0.0, max=3.0] Green
+// @param[default=0.0, min= 0.0, max=3.0] Blue
+
+void mainImage( in float InnerVig, in float OuterVig, in float Red, in float Green, in float Blue, in std::Texture2d Texture, out vec4 Return )
+{
+
+  vec2 iResolution = std::getRenderTargetSize();
+  vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+  float iTime = std::getTime();
+	
+	vec2 uv = fragCoord.xy / iResolution.xy;
+	
+	vec4 color = Texture.sample(uv);
+	
+	vec2 center = vec2(0.5,0.5); // Center of Screen
+    
+	float dist  = distance(center,uv )*1.414213; // Distance  between center and the current Uv. Multiplyed by 1.414213 to fit in the range of 0.0 to 1.0 
+	
+	float vig = clamp((OuterVig-dist) / (OuterVig-InnerVig),0.0,1.0); // Generate the Vignette with Clamp which go from outer Viggnet ring to inner vignette ring with smooth steps
+	
+
+  color *= vig;
+  color.r += (1.0-vig) * Red;
+  color.g += (1.0-vig) * Green;
+  color.b += (1.0-vig) * Blue;
+  Return = color;
+    
+}

@@ -1,0 +1,98 @@
+
+precision highp float;
+
+float random (in vec2 st)
+{
+    return fract(sin(dot(st.xy, vec2(12.9898,78.233)))* 43758.5453123);
+}
+
+float noise(in vec2 st)
+{
+    vec2 i = floor(st);
+    vec2 f = fract(st);
+    float a = random(i);
+    float b = random(i + vec2(1.0, 0.0));
+    float c = random(i + vec2(0.0, 1.0));
+    float d = random(i + vec2(1.0, 1.0));
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    return mix(a, b, u.x) + (c - a)* u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
+}
+
+#define octaves 3
+float fbm(in vec2 p)
+{
+    float value = 0.0;
+    float freq = 1.13;
+    float amp = 0.57;    
+    for (int i = 0; i < octaves; i++)
+    {
+        value += amp * (noise((p - vec2(1.0)) * freq));
+        freq *= 1.61;
+        amp *= 0.47;
+    }
+    return value;
+}
+
+float pat(in vec2 p)
+{
+    float iTime = std::getTime();
+    float time = iTime*0.75;
+    vec2 aPos = vec2(sin(time * 0.035), sin(time * 0.05)) * 3.;
+    vec2 aScale = vec2(3.25);
+    float a = fbm(p * aScale + aPos);
+    vec2 bPos = vec2(sin(time * 0.09), sin(time * 0.11)) * 1.2;
+    vec2 bScale = vec2(0.75);
+    float b = fbm((p + a) * bScale + bPos);
+    vec2 cPos = vec2(-0.6, -0.5) + vec2(sin(-time * 0.01), sin(time * 0.1)) * 1.9;
+    vec2 cScale = vec2(1.25);
+    float c = fbm((p + b) * cScale + cPos);
+    return c;
+}
+
+vec2 Shake(float Intensity, float mag)
+{
+    float iTime = std::getTime();
+    float speed = 20.0*mag;
+    float shakescale = Intensity * mag;
+    
+    float time = iTime*speed;			// speed of shake
+    
+    vec2 p1 = vec2(0.25,0.25);
+    vec2 p2 = vec2(0.75,0.75);
+    p1 += time;
+    p2 += time;
+    
+    // random shake is just too violent...
+    //float val1 = random(p1);
+    //float val2 = random(p2);
+    
+    float val1 = pat(p1);
+    float val2 = pat(p2);
+    val1 = clamp(val1,0.0,1.0);
+    val2 = clamp(val2,0.0,1.0);
+    
+    return vec2(val1*shakescale,val2*shakescale);
+}
+
+// @param[default=0.05, min=0.0, max=0.5] Intensity
+
+void mainImage( in float Intensity, in std::Texture2d Texture, out vec4 Return)
+{
+
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+    float mag = 0.5+0.5;		// shake magnitude...
+
+    // *temp* , We will calc shakexy once in the vertex shader...
+    vec2 shakexy = Shake(Intensity,mag);
+    
+	vec2 uv = fragCoord.xy / iResolution.xy;
+    uv *= 1.0-(Intensity*mag);
+
+    vec4 col  = Texture.sample(uv + shakexy);
+    
+    Return = vec4(col);
+
+}

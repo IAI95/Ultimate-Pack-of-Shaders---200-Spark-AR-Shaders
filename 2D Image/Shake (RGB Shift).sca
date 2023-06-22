@@ -1,0 +1,60 @@
+precision highp float;
+
+vec2 hash22(vec2 p)
+{
+    p = vec2( dot(p,vec2(127.1,311.7)),
+              dot(p,vec2(269.5,183.3)));
+
+    return -1.0 + 2.0 * fract(sin(p)*43758.5453123);
+}
+float perlin_noise(vec2 p)
+{
+    vec2 pi = floor(p);
+    vec2 pf = p - pi;
+
+    vec2 w = pf * pf * (3.0 - 2.0 * pf);
+
+    return mix(mix(dot(hash22(pi + vec2(0.0, 0.0)), pf - vec2(0.0, 0.0)), 
+                   dot(hash22(pi + vec2(1.0, 0.0)), pf - vec2(1.0, 0.0)), w.x), 
+               mix(dot(hash22(pi + vec2(0.0, 1.0)), pf - vec2(0.0, 1.0)), 
+                   dot(hash22(pi + vec2(1.0, 1.0)), pf - vec2(1.0, 1.0)), w.x),
+               w.y);
+}
+
+// @param[default=0.1, min=0.0, max=1.0] NoiseScale
+// @param[default=0.0, min=0.0, max=1.0] Threshold
+// @param[default=10.0, min=0.0, max=50.0] Frequency
+
+void mainImage( in float NoiseScale, in float Threshold, in float Frequency, in std::Texture2d Texture, out vec4 Return )
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+    // Normalized pixel coordinates (from 0 to 1)
+    vec2 uv = fragCoord.xy/iResolution.xy;
+    
+    Threshold = NoiseScale * Threshold;
+
+    float noiseX = NoiseScale * perlin_noise(vec2(iTime * Frequency, 2));
+    float noiseY = NoiseScale * perlin_noise(vec2(iTime * Frequency, 3));
+    float noiseZ = NoiseScale * perlin_noise(vec2(iTime * Frequency, 4));
+    float noiseW = NoiseScale * perlin_noise(vec2(iTime * Frequency, 5));
+    noiseX = noiseX > Threshold ? noiseX : 0.;
+    noiseY = noiseY > Threshold ? noiseY : 0.;
+   	noiseZ = noiseZ > Threshold ? noiseZ : 0.;
+    noiseW = noiseW > Threshold ? noiseW : 0.;
+    vec2 noise = vec2(noiseX, noiseY);
+    vec2 shake = vec2(noiseZ, noiseW);
+    uv += shake;
+
+    float r = Texture.sample(uv - noise).r;
+    float g = Texture.sample(uv).g;
+    float b = Texture.sample(uv + noise).b;
+
+    float a = Texture.sample(uv).a;
+
+
+    // Output to screen
+    Return = vec4(r, g, b, a);
+}

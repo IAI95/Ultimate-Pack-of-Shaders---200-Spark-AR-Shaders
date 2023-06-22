@@ -1,0 +1,41 @@
+//  Adapted by @iamaliimani from https://www.shadertoy.com/view/7lyyWc and https://www.shadertoy.com/view/XlG3DW
+
+precision highp float;
+ 
+ void mainImage( in std::Texture2d GalleryTexture, out vec4 Fill, out vec4 Aspect_Fit, out vec4 Aspect_Fill)
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    vec2 R = std::getRenderTargetSize();
+    vec2 U = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    vec2 UV = fragCoord/iResolution;
+    Fill = GalleryTexture.sample(UV);
+    
+    float textureAspectRatio = (GalleryTexture.size).x / (GalleryTexture.size).y;
+    vec2 ratio = iResolution.xy/(GalleryTexture.size).xy; 
+   if (ratio.x > ratio.y)
+   {
+     fragCoord /= (GalleryTexture.size).xy * ratio.x;
+     float currentTextureHeight = iResolution.x / textureAspectRatio;
+     float offset = (( iResolution.y / currentTextureHeight ) * 0.5 ) - 0.5;
+     fragCoord.y -= offset;
+   }
+   else
+   {
+     fragCoord /= (GalleryTexture.size).xy * ratio.y;
+     float currentTextureWidth = iResolution.y * textureAspectRatio;
+     float offset = ( (iResolution.x / currentTextureWidth) * 0.5 ) - 0.5;
+     fragCoord.x -= offset;
+   }
+   Aspect_Fill = GalleryTexture.sample(fragCoord);
+   
+   vec2 margin = vec2(0);
+   vec2 Sres = R.xy -2.*margin;
+   vec2 Tres = (GalleryTexture.size).xy;
+   vec2 Ratio = Sres/Tres;
+        U -= margin;
+        U -= .5*Tres*max(vec2(Ratio.x-Ratio.y, Ratio.y-Ratio.x),0.);
+        U /= Tres*min(Ratio.x,Ratio.y);
+        U *= 1.;
+        Aspect_Fit = fract(U)==U ? GalleryTexture.sample(U) : Aspect_Fit-Aspect_Fit;
+ }

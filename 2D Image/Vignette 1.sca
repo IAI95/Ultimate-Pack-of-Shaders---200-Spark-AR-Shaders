@@ -1,0 +1,19 @@
+precision highp float;
+
+// @param[default=1.0, min=0.0, max=2.0] Strength
+
+void mainImage( in float Strength, in std::Texture2d Texture, out vec4 Return )
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+    float timeFactor = 1.0  / 2.0;
+    vec2 nCoord = fragCoord/iResolution.xy;
+    vec4 color = Texture.sample( nCoord );
+    vec2 centeredCoord = nCoord - 0.5;
+    
+    float distance = sqrt( dot( centeredCoord,centeredCoord ) );
+    
+    Return = mix( color, vec4(0), distance * Strength * timeFactor );
+}

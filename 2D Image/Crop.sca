@@ -1,0 +1,54 @@
+precision highp float;
+
+vec4 LeftCrop(vec4 texColor,vec2 xy,float size)
+{
+    float l=step(size,xy.x);
+    texColor*=l;
+    return texColor;
+}
+
+vec4 RightCrop(vec4 texColor,vec2 xy,float size)
+{
+    float l=step(size,1.-xy.x);
+    texColor*=l;
+    return texColor;
+}
+
+vec4 BottomCrop(vec4 texColor,vec2 xy,float size)
+{
+    float l=step(size,xy.y);
+    texColor*=l;
+    return texColor;
+}
+
+vec4 TopCrop(vec4 texColor,vec2 xy,float size)
+{
+    float l=step(size,1.-xy.y);
+    texColor*=l;
+    return texColor;
+}
+
+// @param[default=0.1, min=0.0, max=1.0] Top
+// @param[default=0.1, min=0.0, max=1.0] Bottom
+// @param[default=0.1, min=0.0, max=1.0] Left
+// @param[default=0.1, min=0.0, max=1.0] Right
+
+void mainImage( in float Top, in float Bottom, in float Left, in float Right, in std::Texture2d Texture, out vec4 Return )
+{
+
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+    
+    vec2 xy = fragCoord/iResolution.xy;
+    vec4 texColor = Texture.sample(xy);
+    
+    texColor=BottomCrop(texColor,xy,Top);
+    texColor=TopCrop(texColor,xy,Bottom);
+    texColor=LeftCrop(texColor,xy,Left);
+    texColor=RightCrop(texColor,xy,Right);
+
+    Return=texColor;
+    
+    
+}
