@@ -1,0 +1,102 @@
+precision highp float;
+
+export const float MAX_DIST = 15.0;
+ 
+export float s_min(in float x, in float y, in float s) {
+
+    float bridge =
+        clamp(abs(x-y)/s, 0.0, 1.0);
+    return min(x,y) - 0.25 * s * (bridge - 1.0) * (bridge - 1.0);
+}
+
+export float s_max(in float x, in float y, in float s) {
+    float bridge =
+        clamp(abs(x-y)/s, 0.0, 1.0);
+    return max(x,y) + 0.25 * s * (bridge - 1.0) * (bridge - 1.0);
+}
+
+export float cone_sdf(in vec3 loc) {
+    float cone_length = 
+        abs(loc.x) + length(loc.yz);
+	cone_length = 0.7 * (cone_length - 1.5);
+
+	return cone_length;
+}
+
+export float cyl_sdf(in vec3 loc) {
+    float r = length(loc.yz) - 0.5;
+    float cap1 = loc.x - 0.5;
+    float cap2 = -0.75 - loc.x;
+    return s_max(cap1, s_max(cap2, r, 0.2), 0.2);
+}
+
+export float inv_sphere(in vec3 loc, in vec3 cent, in float rad) {
+  return max(-rad, rad - length(cent - loc));
+}
+
+export float vehicle_sdf(in vec3 loc) {
+    float c = cone_sdf(loc);
+    float p = -loc.y;
+    float b = -loc.x + 0.2;
+    float shell = s_max(c, b, 0.6);
+    float back = s_max(cyl_sdf(loc), p, 0.1);
+    shell = s_min(shell, back, 0.4);
+    shell = s_max(shell,  p, 0.2);
+    
+    vec3 eye1 = vec3(0.7, 0.3, 0.3);
+    vec3 eye2 = vec3(0.7, 0.3, -0.3);
+    
+    return shell 
+        + 0.1 * smoothstep(0.2, 0.0, length(loc.zy - vec2(0.42, 0.0)))
+        + 0.1 * smoothstep(0.2, 0.0, length(loc.zy + vec2(0.42, 0.0)))
+        - 0.25 * smoothstep(0.41, 0.0, length(loc - eye1))
+        - 0.25 * smoothstep(0.41, 0.0, length(loc - eye2))
+        - 0.1 * smoothstep(0.2, -0.0, loc.y) * (1.0 + 0.2 * smoothstep(0.4, 0.6, abs(loc.z)));
+}
+
+export vec3 perturb2(in vec3 loc) {
+    return loc;
+}
+
+export float vehicle_sdf2(in vec3 loc) {
+    float ball1 = length(loc - vec3(0.0, -0.8, 0.0)) - 1.0;
+    float ball2 = length(loc - vec3(0.0, 0.8, 0.0)) - 1.0;
+    float disc = s_max(ball1, ball2, 0.05);
+    float ball3 = length(loc - vec3(0.0, 0.1, 0.0)) - 0.2;
+    return s_min(disc, ball3, 0.1);
+}
+
+export vec3 vehicle_sdf2_grad(in vec3 loc) {
+    float dist = vehicle_sdf2(perturb2(loc));
+    const float del = 0.01;
+    return vec3(vehicle_sdf2(perturb2(loc + vec3(del, 0.0, 0.0))) - dist,
+                vehicle_sdf2(perturb2(loc + vec3(0.0, del, 0.0))) - dist,
+                vehicle_sdf2(perturb2(loc + vec3(0.0, 0.0, del))) - dist) / del;
+}
+
+export float cast_to_vehicle2(in vec3 orig, in vec3 dir, out float mindist) {
+    vec3 p = orig;
+    float accum = 0.0;
+    mindist = MAX_DIST;
+    for (int i = 0; i < 256; ++i) {
+        float dist = vehicle_sdf2(p);
+        mindist = min(dist, mindist);
+    	float remaining = 0.7 * dist;
+        accum += remaining;
+        p = orig + accum * dir;
+        p = perturb2(p);
+        if (remaining < 1.0e-3 || accum > MAX_DIST) {
+            return accum;
+        }
+    }
+	return max(accum, MAX_DIST + 1.0);
+}
+
+export vec3 get_bounce2(in vec3 pt, in vec3 dir) {
+    vec3 norm = normalize(vehicle_sdf2_grad(pt));
+    return normalize(reflect(dir, norm));
+}
+
+
+
+

@@ -1,0 +1,22 @@
+precision highp float;
+
+// @param[default=0.001, min=0.0, max=1.0] Soft
+// @param[default=0.5, min=0.0, max=1.0] Threshold
+
+void mainImage( in float Soft, in float Threshold, in std::Texture2d Texture, out vec4 Return )
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+	float f = Soft/2.0;
+	float a = Threshold - f;
+	float b = Threshold + f;
+	
+	vec4 tx = Texture.sample( fragCoord.xy/iResolution.xy);
+	float l = (tx.x + tx.y + tx.z) / 3.0;
+	
+	float v = smoothstep(a, b, l);
+	
+	Return = vec4(v);
+}

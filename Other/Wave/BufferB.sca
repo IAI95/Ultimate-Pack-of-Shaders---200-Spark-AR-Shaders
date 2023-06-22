@@ -1,0 +1,15 @@
+precision highp float;
+
+void mainImage( in std::Texture2d BufferA, out vec4 Return )
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+    vec4 acc = vec4(0);
+    for(int i = -10; i <= 10; i ++)
+    {
+		 acc += BufferA.sample(fragCoord.xy / iResolution.xy + vec2(float(i), 0.) / iResolution.x);
+    }
+    Return = acc / float(10 * 2 + 1);
+}

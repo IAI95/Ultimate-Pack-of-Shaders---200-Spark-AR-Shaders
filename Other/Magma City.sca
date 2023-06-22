@@ -1,0 +1,125 @@
+precision highp float;
+
+#define BackCol lerp(vec4(.9,.3,.3, 0.0) , vec4(.6,.3,.05, 0.0) , 0.5 + 0.5 * sin(std::getTime()))
+
+/*Remove for Low Quality -> */
+#define HighQ
+
+vec4 lerp(vec4 v1,vec4 v2,float t)
+{
+    return(v2-v1)*t+v1;
+}
+
+float random(vec2 st)
+{
+    return fract(sin(dot(st,
+                vec2(12.9898,78.233)))*
+            43758.5453123);
+        }
+        
+        float noise(vec2 st)
+        {
+            vec2 st0=floor(st);
+            vec2 st1=.5-cos((st-st0)*3.14)*.5;
+            float a0=random(vec2(int(st0.x),int(st0.y)));
+            float a1=random(vec2(int(st0.x)+1,int(st0.y)));
+            
+            float a2=random(vec2(int(st0.x),int(st0.y)+1));
+            float a3=random(vec2(int(st0.x)+1,int(st0.y)+1));
+            
+            float b0=(a1-a0)*st1.x+a0;
+            
+            float b1=(a3-a2)*st1.x+a2;
+            return 0.0;
+            //return (b1-b0)*st1.y+b0;
+        }
+        
+        bool isBuilding(vec2 uv, int CityWidth, float BuildingWidth)
+        {
+            for(int j=-CityWidth;j<=CityWidth;j++){
+                for(int n=0;n<5;n++){
+                    float h=float(n)*.01+(random(vec2(floor(uv.x*BuildingWidth+float(j)),n))-.5)/2.+.25;
+                    if(h>=uv.y&&
+                        fract(uv.x*BuildingWidth)-.5-float(j)*1.5<float(CityWidth+1)*1.-float(n)/7.+fract(floor((h-uv.y)*100.*random(vec2(floor(uv.x*BuildingWidth))))/2.)*.1&&
+                        fract(uv.x*BuildingWidth)-.5-float(j)*1.5>-float(CityWidth-2)*float(n)/7.-fract(floor((h-uv.y)*100.*random(vec2(floor(uv.x*BuildingWidth))))/2.)*.1){
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            }
+            
+            bool isBalc(vec2 uv)
+            {
+                float iTime = std::getTime();
+                return fract(uv.x)<.0;
+            }
+
+            // @param[default=10.0 , min=1.0 , max=20.0] Speed
+            // @param[default=10] CityDepth
+            // @param[default=0.01] Paralax
+            // @param[default=1] CityWidth
+            // @param[default=10.0] BuildingWidth
+            // @param[default=#4D004DFF] FrontCol
+
+
+            void mainImage( in float Speed, in int CityDepth, in float Paralax, in int CityWidth, in float BuildingWidth, in vec4 FrontCol, out vec4 fragColor )
+            {
+                vec2 iResolution = std::getRenderTargetSize();
+                vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+                float iTime = std::getTime();
+
+                fragColor = vec4(0);
+                vec2 uv = 1.0-vec2(1.0-fragCoord.x, 1.0-fragCoord.y) / vec2(iResolution.x, 1.0-iResolution.y);
+                vec2 sv = uv;
+                uv+=noise(uv*10.+iTime)*.002;
+                uv.x+=iTime/Speed-947.2984;
+                if(isBalc(uv))
+                {
+                    if(isBalc(uv+vec2(.005,0)))
+                    {
+                        if(isBalc(vec2(uv.x+(sv.x-.5)*(sv.y-.3),.5-uv.y))||uv.y>.2)
+                        fragColor=vec4(0.0);
+                        else
+                        fragColor=lerp(BackCol,vec4(0.0),.5-uv.y/.5);
+                    }
+                    else
+                    fragColor=BackCol;
+                }
+                else{
+                    bool broke=false;
+                    for(int i=0;i<CityDepth;i++){
+                        float mult=iTime*Paralax*float(CityDepth-i);
+                        if(isBuilding(uv+vec2(mult,0), CityWidth, BuildingWidth))
+                        {
+                            fragColor+=lerp(BackCol,FrontCol,1./float(i+1));
+                            broke=true;
+                            break;
+                        }
+                        if(broke)
+                        {
+                            break;
+                        }
+                        else
+                        {
+                            #ifdef HighQ
+                            vec4 c=lerp(BackCol,FrontCol,1./float(i+1));
+                            fragColor+=c*2.*max(0.,.7+.3*noise(vec2(uv.x+mult,float(i)*292.293))-sv.y);
+                            if(fract(uv.x+mult+.2723)<.1){
+                                fragColor+=vec4(0,0,.1,0)*max(0.,(8.-uv.y*10.));
+                            }
+                            #endif
+                        }
+                        uv.x*=1.1;
+                        uv.y-=1./float(CityDepth)/4.;
+                    }
+                    if(!broke)
+                    {
+                        fragColor+=lerp(vec4(.9,.5,.2,0.0),vec4(.01,.01,.2,0.0),uv.y);
+                        float f=noise(vec2(iTime*10.,0)+sv*iResolution.xy*.5);
+                        if(f>.95&&noise(vec2(iTime*10.,0)+sv*50.)>.5)
+                        fragColor+=(f-.9)/.1;
+                    }
+                }
+            }
+            

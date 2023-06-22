@@ -1,0 +1,14 @@
+precision highp float;
+
+void mainImage( in std::Texture2d Texture, out vec4 Return )
+{
+
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+	vec3 c = Texture.sample(fragCoord.xy / iResolution.xy).xyz;
+    vec3 d = c;
+    float m = smoothstep(0., 0.01, dot(d, d));    
+    Return = vec4(vec3(m,dot(c, vec3(1)) * m, 0.),1.);
+}

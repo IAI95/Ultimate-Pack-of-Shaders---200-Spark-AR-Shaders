@@ -1,0 +1,34 @@
+precision highp float; 
+ 
+#import <Common.sca>
+
+void mainImage( in std::Texture2d Texture1, in std::Texture2d Texture2, in std::Texture2d Texture3, in std::Texture2d Texture4, out vec4 fragColor )
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+    
+	vec2 uv = 2.0 * fragCoord.xy / iResolution.xy;
+    if (2.0 * fragCoord.y > iResolution.y) 
+    {
+        if (2.0 * fragCoord.x > iResolution.x) 
+        {
+            fragColor = Texture1.sample(uv - vec2(1.0));
+        } 
+        else 
+        {
+            fragColor = Texture2.sample(uv - vec2(0.0, 1.0));
+        }
+     }
+     else 
+     {
+        if (2.0 * fragCoord.x > iResolution.x) 
+        {
+            fragColor = Texture3.sample(uv - vec2(1.0, 0.0));
+        }
+        else 
+        {
+            fragColor = Texture4.sample(uv - vec2(0.0));
+        }
+    }
+}

@@ -1,0 +1,29 @@
+float map(float low1, float high1, float low2, float high2, float value)
+{
+	value = max(value, low1);
+	value = min(value, high1);
+	return low2 + (value - low1) * (high2 - low2) / (high1 - low1);
+}
+
+// @param[default=vec2(500.0, 0.0)] ScreenPan
+
+void mainImage( in vec2 ScreenPan, in std::Texture2d Texture, out vec4 Return )
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+    vec2 uv = fragCoord/iResolution.xy; 
+
+    float cols = abs(clamp(ScreenPan.x/60.0, 1.0, 16.0));
+
+   	// steps
+	float qx = floor(uv.x * cols) / cols;
+    
+    // texture calculation
+    float fx = mod(2. - map(qx, qx + 1.0/cols, qx + 1.0/cols, qx, uv.x),1.);
+    
+    Return = Texture.sample(vec2(fx,uv.y));
+}
+
+

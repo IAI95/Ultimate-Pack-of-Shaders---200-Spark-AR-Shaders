@@ -1,0 +1,15 @@
+precision highp float;
+
+// by Nikos Papadopoulos, 4rknova / 2013
+// WTFPL
+
+// @param[default=15.0, min=2.0, max=50.0] Scale
+
+void mainImage( in float Scale, out vec4 Return )
+{
+    vec2 p = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    vec2 iResolution = std::getRenderTargetSize();
+
+	vec2 uv = floor(Scale * p.xy * vec2(iResolution.x / iResolution.y, 1) / iResolution.xy);
+	Return = vec4(vec3(mod(uv.x + uv.y, 2.)), 1);
+}

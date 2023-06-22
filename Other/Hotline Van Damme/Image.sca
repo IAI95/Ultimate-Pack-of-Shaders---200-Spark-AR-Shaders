@@ -1,0 +1,68 @@
+precision highp float;
+
+vec3 hsv2rgb(vec3 c)
+{
+    vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+    vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+    return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+}
+
+vec3 ACESFilm( vec3 x )
+{
+    x *= 0.6; // For the original ACES curve just multiply input (x) by 0.6.
+    float a = 2.51;
+    float b = 0.03;
+    float c = 2.43;
+    float d = 0.59;
+    float e = 0.14;
+    return clamp((x*(a*x+b))/(x*(c*x+d)+e), 0.0, 1.0);
+}
+
+float dist(vec2 p0, vec2 pf)
+{
+    return sqrt((pf.x-p0.x)*(pf.x-p0.x)+(pf.y-p0.y)*(pf.y-p0.y));
+}
+
+// @param[default=16.0, min=1.0, max=30.0] ToneMapping
+// @param[default=2.0, min=1.0, max=10.0] Contrast
+
+void mainImage( in float iFrame, in float ToneMapping, in float Contrast, in std::Texture2d BufferB, in std::Texture2d tex16, in std::Texture2d tex15, out vec4 Return )
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+        
+    vec2 uv = fragCoord.xy / iResolution.xy;
+    float time = iTime * 0.4;
+        
+    float lines = sin(uv.y * iResolution.y * 2.);
+    
+    float noise = tex16.sample(uv * 4. + time).r; 
+    noise += tex16.sample( 0.5 + uv * 3. - time).r;    
+    noise *= 0.333;
+    noise *= lines * 0.5 + 0.5;
+    noise = 0.6 + noise * 0.8;
+   
+    float sound = tex15.sample( (uv - vec2(0.5,0.0)) * 0.001 + 0.15).r;
+    
+    float d = dist(iResolution.xy*0.5,fragCoord.xy)*(atan(iTime * 10.1)+1.5)*0.003;
+    d *= clamp(0.0, 1.0 , float(iFrame)* 0.001 ); 
+    d = mix(1.0, 0.0 ,d);
+
+    
+    vec4 c = BufferB.sample( (uv - 0.5) * (0.9 + sound * 0.2) + 0.5 ).rgba;    
+    c.rgb *= vec3(d * 0.05 + 0.975);
+    c.rgb *= sound * sound;
+    c.rgb *= noise;
+    
+    // ToneMapping
+    c *= ToneMapping;  
+	c.rgb = ACESFilm(c.rgb);
+    
+    // Contrast
+    c *= c * c;
+    c *= Contrast;
+    
+    
+	Return = vec4(c.rgb,1.0);
+}

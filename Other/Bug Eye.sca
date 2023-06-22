@@ -1,0 +1,75 @@
+precision highp float;
+
+#define SQRT3 1.732050807
+#define PI 3.141592653
+
+vec2 hexCenter(vec2 id, float odd, float Radius)
+{
+	return vec2(
+		SQRT3 * Radius * (id.x +.5*odd),
+		1.5 * id.y * Radius
+		);
+}
+
+// @param[default=0.075, min=0.01, max=0.3] Radius          //Radius for each hexagon. Smaller = more hexagons
+// @param[default=2.0, min=0.01, max=4.0] Offset            //Difference between neighbouring hexagons
+// @param[default=1.0, min=0.01, max=3.0 ] Fisheye          //Strength of Fisheye effect on each facet
+
+void mainImage( in float Radius, in float Offset, in float Fisheye, in std::Texture2d Texture, out vec4 Return )
+{
+
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+	//UV coordinates [1,2]
+	vec2 uv = fragCoord.xy / iResolution.xy;
+	uv.xy += 1.0;
+	vec2 grid;
+
+	//Estimate hex coordinate
+	grid.y = floor(uv.y / (1.5*Radius));
+	float odd = mod(grid.y, 2.0);
+	grid.x = floor(uv.x / (SQRT3 * Radius) - odd*.5);
+
+	//Find possible centers of hexagons
+	vec2 h1 = hexCenter(grid, odd, Radius);
+	vec2 h2 = hexCenter(grid + vec2(1.0,0.0), odd, Radius);
+	vec2 h3 = hexCenter(grid + vec2(odd, 1.0), 1.0-odd, Radius);
+
+	//Find closest center
+	float d1 = dot(h1-uv, h1-uv);
+	float d2 = dot(h2-uv, h2-uv);
+	float d3 = dot(h3-uv, h3-uv);
+    
+	if (d2 < d1)
+	{
+		d1 = d2;
+		h1 = h2;
+	}
+	if (d3 < d1)
+	{
+		d1 = d3;
+		h1 = h3;
+	}
+	
+    //Hexagon UV
+	vec2 uv2 = uv - h1;
+    
+    //Set Hexagon Offset
+	uv = (uv.xy - 1.0) + uv2 * Offset;
+
+    //Per Facet Fisheyeeye effect (optional)
+	vec2 coords = (uv2 - 0.5*Radius) * 2.0;
+	vec2 fisheye;
+	fisheye.x = (1.0 - coords.y * coords.y) * Fisheye * (coords.x);
+	fisheye.y = (1.0 - coords.x * coords.x) * Fisheye * (coords.y);
+	uv -= fisheye*Radius;
+
+
+    //Retrieve texture colour
+    Return = Texture.sample(uv);
+
+    //Redude corners (optional)
+	//o = max(vec4(0.0), o - length(2.0*uv-1.0)*FALLOFF);
+}

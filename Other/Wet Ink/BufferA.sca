@@ -1,0 +1,68 @@
+// created by florian berger (flockaroo) - 2016
+// License Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.
+
+precision highp float;
+
+const float twopi=6.28318531;
+
+float posTri(float x)
+{
+    // thanks Shane for the anti-branching-fix
+    return abs(fract(x - .5) - .5)*2.;
+    //x=fract(x);
+   	//return 2.*(x<.5?x:1.-x);
+}
+
+vec3 getRand(vec2 uv, std::Texture2d tex08)
+{
+    return tex08.sample(uv).xyz;
+}
+
+float spiral(vec2 pos, float Slope, out vec2 coord)
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    float iTime = std::getTime();
+    float l=length(pos);
+    float ang=atan(pos.y,pos.x)+5.0*iTime;
+    float r=posTri(ang/twopi+l/Slope);
+    //coord = normalize(pos)*(floor(ang/twopi+l/Slope)+0.5)*Slope;
+    //floor(fract(ang/twopi)+l/Slope)
+    coord = normalize(pos)*(floor(l/Slope+fract(ang/twopi))-fract(ang/twopi)+.5)*Slope;
+    //coord =pos;
+    coord = (coord+0.5*iResolution.xy)/ iResolution.xy;
+    //float lmax=iResolution.y*.49;
+    //if(l>lmax) r+=l-lmax;
+    return r;
+}
+
+vec3 getCol(vec2 uv, std::Texture2d Texture, float Slope)
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 Res = iResolution;
+    vec2 Res0 = (Texture.size);
+
+    vec3 c = Texture.sampleLod(uv,0.5*log2(Slope/(Res.x/Res0.x))).xyz;
+    float d=clamp(dot(c.xyz,vec3(-0.5,1.0,-0.5)),0.0,1.0);
+    c=mix(c,vec3(1.5),1.8*d);
+    c=clamp(vec3(dot(c,vec3(1./3.))),0.,1.);
+    return c;
+    //return mix(c,vec3(1),dot(c,vec3(0,1,0)));
+}
+
+// @param[default=40.0, min=20.0, max=80.0] Slope
+
+void mainImage( in float Slope, in std::Texture2d tex08, in std::Texture2d Texture, out vec4 Return )
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+	vec2 uv = fragCoord.xy / iResolution.xy;
+	float t1 = tex08.sample(fragCoord.xy/100.0).x;
+    vec3 pattern = vec3(spiral(fragCoord-0.5*iResolution.xy,Slope,uv)+0.15*(t1-.5));
+    vec3 col = getCol(uv, Texture, Slope);
+    float b=0.7*(1.-col.x)+0.35;
+    float c=clamp(pattern.x-1.+b,0.,1.);
+    c=b-(b-c)*(b-c)/b/b;
+	Return = vec4(1.-c);
+}

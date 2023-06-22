@@ -1,0 +1,236 @@
+// created by florian berger (flockaroo) - 2018
+// License Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.
+
+// cross stitch
+
+// generating crosses, cloth patterns,...
+
+// configured for green-screen background.
+// uncomment your prefered bg in BufA from line 178 on
+
+#define PI 3.14159265359	
+#define sin01(x) sin((x)*PI*2.)
+#define cos01(x) cos((x)*PI*2.)
+#define hump(x) cos(clamp(x,-.5,.5)*PI)
+#define humpW(x,w) cos(clamp((x)/(w),-.5,.5)*PI)
+#define hump01(x) sin(clamp(x,0.,1.)*PI)
+//#define hump(x) exp(-x*x)
+
+precision highp float;
+
+float window(float x, float w)
+{
+    return exp(-x*x/w*w);
+}
+
+float tuch(vec2 coord, std::Texture2d tex16)
+{
+    coord=coord*2.+.25;
+    vec4 rnd1 = tex16.sample(coord*vec2(.001,.015));
+    vec4 rnd2 = tex16.sample(coord*vec2(.015,.001));
+    float p = 0.0;
+    vec2 c=clamp(cos01(coord)*1.,-1.,1.);
+    vec2 c2=abs(clamp(sin01(coord*2.6),-1.,1.))*.5+.5;
+    //c2=vec2(1);
+    p=max(p,( c.x*c.y*.5+.5+.4*rnd2.x)*1.*abs(c.x+.4*(rnd2.x-.5))*c2.x);
+    p=max(p,(-c.x*c.y*.5+.5+.4*rnd1.x)*1.*abs(c.y+.4*(rnd1.x-.5))*c2.y);
+    return p;
+}
+
+float kreuz(vec2 coord, std::Texture2d tex16)
+{
+    float stitchWidth=1.;
+    vec4 rnd = tex16.sample((floor(coord*2.+.5))/256.);
+    coord+=abs(cos01(coord.x*1.))*abs(cos01(coord.y*1.))*.3*(rnd.xy-.5+.15*vec2(-1,1));
+    vec2 pc=fract(coord*2.+.5);
+    pc+=.0*sin01(pc);
+    float faser1=.7+.3*abs(sin01((pc.x+pc.y)*1.7-(pc.x-pc.y)*.5));
+    float faser2=.7+.3*abs(sin01((pc.x-pc.y)*1.7+(pc.x+pc.y)*.5));
+    return max(
+        -.15+humpW(pc.x+pc.y-1.,stitchWidth)*faser1*1.2,
+         .15+humpW(pc.x-pc.y   ,stitchWidth)*faser2*1.2
+        )*(.5+.5*hump01(pc.x)*hump01(pc.y))*2.4;
+}
+
+float gauss(vec2 v)
+{
+    return exp(-dot(v,v)*25.);
+}
+
+float kreuzAO(vec2 coord, std::Texture2d tex16)
+{
+    //return 1.;
+    vec4 rnd = tex16.sample((floor(coord*2.+.5))/256.);
+    coord+=abs(cos01(coord.x*1.))*abs(cos01(coord.y*1.))*.3*(rnd.xy-.5+.15*vec2(-1,1));
+    vec2 pc=fract(coord*2.+.5);
+    return 1.-.6*(gauss(pc)+gauss(pc-vec2(1,0))+gauss(pc-vec2(1,1))+gauss(pc-vec2(0,1)));
+}
+
+vec3 quant(vec3 c, ivec3 num)
+{
+    vec3 fnum=vec3(num);
+    return floor(c*(fnum-.0001))/(fnum-1.);
+}
+
+// HSV <-> RGB from http://lolengine.net/blog/2013/07/27/rgb-to-hsv-in-glsl
+vec3 rgb2hsv(vec3 c)
+{
+    vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
+    vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
+    vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
+
+    float d = q.x - min(q.w, q.y);
+    float e = 1.0e-10;
+    return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
+}
+vec3 hsv2rgb(vec3 c)
+{
+    vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+    vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+    return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+}
+
+vec3 quantHSV(vec3 c, ivec3 num)
+{
+    return hsv2rgb(quant(rgb2hsv(c)*vec3(1,1.1,1.1),num));
+}
+
+vec3 vid(vec2 coord, std::Texture2d Texture)
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    return clamp(quantHSV(Texture.sample(coord/iResolution.xy).xyz,ivec3(48,6,6)),0.,1.);
+}
+
+int idiv(int a, int b)
+{
+    return (a>=0)?a/b:(a-b+1)/b;
+}
+
+int imod(int a, int b)
+{
+    //return (a>=0)?a%b:(a+b*(-a/b+1))%b;
+    return (a>=0) ? (int(mod(float(a), float(b)))) : (b - (int(mod(float((int(mod(float((-a)), float(b))))), float(b)))));
+}
+
+void zigzag(inout vec3 col, int period, ivec2 coord)
+{
+    col=((imod(coord.x,period)-period/2)==(imod(idiv(coord.x,period),2)*2-1)*coord.y)?vec3(0,.75,0):col;
+}
+
+void flower(inout vec3 col, ivec2 coord)
+{
+    float l=length(vec2(coord.xy));
+    col=(l<2.5)?vec3(.75,0,0):col;
+    col=(l<1.0)?vec3(.75,.75,0):col;
+}
+
+void frameLine(inout vec3 col, inout float isStitch, ivec2 coord, int w, bool trunk)
+{
+    //if (abs(coord.y)<w/2+coord.x%2) { isStitch = 0.; col=vec3(1); };
+    vec3 oldcol;
+    oldcol=col;
+    if(trunk) zigzag(col, w/2, coord);
+    if (oldcol!=col) isStitch=1.;
+    oldcol=col;
+    flower(col, ivec2(imod(coord.x,20)-10,coord.y+int(sin(float(idiv(coord.x,20))*2.)*float(w)*.35)));
+    if (oldcol!=col) isStitch=1.;
+}
+
+void frame(inout vec3 col, inout float isStitch, ivec2 coord, ivec2 s, int w)
+{
+    //if (coord.y-s.y<-s.y+w-coord.x%2) { isStitch = 0.; col=vec3(1); };
+    if (abs(coord.y-s.y)>s.y-w+imod(coord.x+1,2)) { isStitch = 0.; col=vec3(1); };
+    if (abs(coord.x-s.x)>s.x-w+imod(coord.y+1,2)) { isStitch = 0.; col=vec3(1); };
+    frameLine(col, isStitch, (coord+ivec2(0,-w/3)).xy, w,true);
+    frameLine(col, isStitch, (coord+ivec2(0,-s.y*2+w/3)).xy, w,true);
+    frameLine(col, isStitch, (coord+ivec2(-w/3,0)).yx, w,true);
+    frameLine(col, isStitch, (coord+ivec2(-s.x*2+w/3,0)).yx, w,true);
+}
+
+vec4 getRand(vec2 coord, std::Texture2d tex16)
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    coord+=1000.;
+    vec2 res = (tex16.size);
+    //return texture(tex16,coord/res);
+    vec2 p = floor(coord);
+    vec2 f = fract(coord);
+    // iq's special interpolation
+    f = f*f*(3.0-2.0*f);
+    vec2 uv;
+    return tex16.sample((p.xy + 0.5 + f.xy)/res);
+}
+
+// @param[default=1.0, min=1.0, max=3.5] Intensity
+
+void mainImage( in float Intensity, in std::Texture2d Texture, in std::Texture2d tex16, out vec4 Return )
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+    float CrossSize = floor(18.*sqrt(iResolution.x/iResolution.y))*Intensity;
+ 
+    //fragCoord-=.5*(iMouse.xy-.5*iResolution.xy);
+    fragCoord += 3.0*sin(iTime*1.*vec2(1,1.7))*iResolution.y/400.;
+    vec3 clothCol = vec3(1,.95,.8);
+    //vec4 rnd=texture(tex16,fragCoord*.00005);
+    vec4 rnd=getRand(fragCoord*.012, tex16)-.5;
+    vec4 rndx=getRand(vec2(fragCoord.x*.008,.5), tex16)-.5;
+    vec4 rndy=getRand(vec2(.5,fragCoord.y*.008), tex16);
+    vec2 coord=(fragCoord+10.*vec2(rndy.x,rndx.y)+3.*rnd.xy);
+    float crossSize=CrossSize;
+    vec2 tc=coord/crossSize;
+    float tuchPat = sqrt(tuch(tc, tex16));
+    tuchPat=clamp(tuchPat,0.,1.);
+    //Return.xyz = vec3(0) + tuch(tc) * vec3(0,1,1) + kreuz(tc) * vec3(1,0,0);
+    vec2 vidCoord = floor(coord*2./crossSize+.5)/2.*crossSize;
+    //vec3 vidCol = vid(vidCoord)*vec3(fract(coord*2.*tuchScale+.5),0.);
+    #define FrameWidth 6
+    vec2 vc;
+    vc=(vidCoord-.5*iResolution.xy)*iResolution.xy/(iResolution.xy-float(FrameWidth-1)*crossSize)+.5*iResolution.xy;
+    //vc=vidCoord;
+    vec3 vidCol = vid(vc, Texture);
+    float kreuzPat = kreuz(tc, tex16);
+    float pixGrad=(1.-.5*length(fract(coord*2./crossSize+.5)-.5));
+
+    float isStitch = 1.;
+    
+    // green screen
+    isStitch = 1.-step(.5,dot(vidCol.xyz,vec3(-1,2,-1)));
+    
+    // black bg
+    //isStitch = step(0.01,dot(vidCol,vec3(.333)));
+    
+    // white bg
+    //isStitch = 1.-step(0.9,vidCol.x);
+    
+    // cloth bg
+    //isStitch = step(0.2,length(vidCol-clothCol));
+    
+    vidCol=vidCol*.75+.1; // suggestion by P_Malin - FIXME: want to tweak this and maybe get rid of HSV*vec3(1,1.1,1.1) in quantHSV. but eyes too tired now for this... ;-(
+    frame(vidCol, isStitch, ivec2(floor(vidCoord*2./crossSize)),ivec2(iResolution.xy/crossSize+.5),FrameWidth);
+    
+    //float allPat = mix(tuchPat,isStitch,isStitch*kreuzPat);
+    float allPat = max(tuchPat,isStitch*kreuzPat);
+    vec3 col = mix(vec3(1,.9,.8),vidCol*1.5,isStitch*kreuzPat);
+    col=vec3(1);
+    //if (Return.xyz!=tuchCol) Return.xyz*=vidCol*1.7;
+    //Return.xyz*=mix(vec3(1),vidCol,isStitch);
+    Return.xyz = allPat*col;
+    //Return.xyz = vec3(0)+kreuzPat;
+    vec2 ds=(fragCoord.xy-iResolution.xy*.5)/iResolution.xy*2.;
+    Return.xyz = (allPat>tuchPat)?vidCol*kreuzAO(tc, tex16):clothCol;
+    /*Return.xyz = mix(
+        vec3(1,.9,.8)*tuchPat,
+        vidCol*1.5,
+        isStitch*clamp(kreuzPat,0.,1.)
+        );*/
+    //Return.xyz = vec3(0)+kreuzPat;
+    Return.w=allPat
+    +.04*(getRand(fragCoord/CrossSize*20.*2., tex16).y-.5)
+    +.08*(getRand(fragCoord/CrossSize*20.*1., tex16).y-.5)
+    +.16*(getRand(fragCoord/CrossSize*20.*.5, tex16).y-.5)
+        ;
+}
+

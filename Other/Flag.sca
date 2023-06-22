@@ -1,0 +1,121 @@
+precision highp float;
+
+#define PI 3.14159267543
+
+float star(vec2 a)
+{
+    float f=0.;
+    a.x=1.-a.x;
+    for (float i=0.;i<5.;i++)
+    {
+        if(a.x*sin(i*0.4*PI)+a.y*cos(i*0.4*PI)>-0.5)f+=0.1;
+    }
+    return float(f>0.3);
+     
+}
+
+// @param[default=0.23, min=0.0, max=0.5] Speed
+
+void mainImage( in float Speed, in std::Texture2d Texture, out vec4 Aspect, out vec4 Rectangle )
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+    vec2 U = normalize(iResolution.xx);
+    Aspect = vec4(0);
+
+    for(int ju=0;ju<4;ju++)
+    {
+    vec4 col;
+
+    vec2 uv = 1.0 - (vec2(fragCoord.x, fragCoord.y) / vec2(iResolution.x, iResolution.y));
+
+    float time=iTime*Speed;
+    float f=uv.x*sin(1.)*cos((time+uv.x*-0.5)*32.0)*0.5+0.5;
+    float c=uv.y*6.2+f*0.5;
+    col.rgba=Texture.sample(U*vec2(-0.2,+0.2)+1.7*U*vec2(1.-uv.x,1.-c*0.2)).rgba;
+    col.rgba*=vec4(-f*0.5+1.0);
+        
+    float bumpah=sin(c/0.02)*sin(uv.x/0.002)*0.01;
+    c+=bumpah*0.3;
+    bumpah*=-1.;
+        
+    if(c<1.5)col.rgba=vec4(0);
+    if(c>5.5)col.rgba=vec4(0);
+    if(0.3*bumpah-0.2+0.2*sin(uv.y*3.)+uv.x*6.2+1.*0.5>5.5)col.rgba=vec4(0);
+    if(0.3*bumpah+uv.x*6.2+1.*0.5<1.5)col.rgba=vec4(0);
+          
+    uv.x-=0.00164;
+    float rf=round(uv.x*10.)*0.1*sin(1.)*cos((time+round(uv.x*10.)*0.1*0.5)*32.0)*0.5+0.5;
+    float rc=uv.y*6.2+rf*0.5;
+    float m=-(0.4/sqrt(rf))*0.1+1.1;
+    uv.x=(uv.x-0.82)*m+0.82;
+
+    float g=m*sin(uv.x*100.+0.3);
+
+    uv.x+=0.00164;
+    if(uv.x>0.806&&uv.x<0.85&&rc+0.04*g>1.3)
+    {
+    float og=g;
+    g*=0.4+sin(uv.x*1000.+3.0*cos(uv.y*10.+10.*sin(uv.x*8.)))*0.4;
+    col.rgba=vec4(g*0.7+0.7,g*0.4+0.3,g*0.2+0.2, 0.0);
+    vec2 bpos=uv*vec2(1.3,2)-vec2(og,1);
+    float fake_spec=0.04/dot(bpos,bpos);
+    fake_spec=3.*fake_spec*fake_spec+2.*fake_spec*fake_spec*fake_spec;
+    col.rgba+=vec4(fake_spec)*0.1;
+    col.rgba*=0.0;
+    }
+    else if (col.rgba!=vec4(0))col.rgba+=vec4(bumpah);
+    Aspect += vec4(col*(1.2/4.));  
+    }   
+
+    //////////////////////////////////////////////////////////////////////////////////
+
+    Rectangle = vec4(0);
+
+    for(int ju=0;ju<4;ju++)
+    {
+    vec4 col2;
+
+    vec2 uv2 = 1.0 - (2.5 * vec2(fragCoord.x * 0.6 - 0.12, fragCoord.y - 0.5) - 1.25 * vec2(iResolution.x * 0.6 - 0.12, iResolution.y - 0.5)) / iResolution.y - 0.5;
+
+    float time=iTime*Speed;
+    float f=uv2.x*sin(1.)*cos((time+uv2.x*-0.5)*32.0)*0.5+0.5;
+    float c=uv2.y*6.2+f*0.5;
+    col2.rgba=Texture.sample(U*vec2(-0.2,+0.2)+1.7*U*vec2(1.-uv2.x,1.-c*0.2)).rgba;
+    col2.rgba*=vec4(-f*0.5+1.0);
+        
+    float bumpah=sin(c/0.02)*sin(uv2.x/0.002)*0.01;
+    c+=bumpah*0.3;
+    bumpah*=-1.;
+        
+    if(c<1.5)col2.rgba=vec4(0);
+    if(c>5.5)col2.rgba=vec4(0);
+    if(0.3*bumpah-0.2+0.2*sin(uv2.y*3.)+uv2.x*6.2+1.*0.5>5.5)col2.rgba=vec4(0);
+    if(0.3*bumpah+uv2.x*6.2+1.*0.5<1.5)col2.rgba=vec4(0);
+          
+    uv2.x-=0.00164;
+    float rf=round(uv2.x*10.)*0.1*sin(1.)*cos((time+round(uv2.x*10.)*0.1*0.5)*32.0)*0.5+0.5;
+    float rc=uv2.y*6.2+rf*0.5;
+    float m=-(0.4/sqrt(rf))*0.1+1.1;
+    uv2.x=(uv2.x-0.82)*m+0.82;
+
+    float g=m*sin(uv2.x*100.+0.3);
+
+    uv2.x+=0.00164;
+    if(uv2.x>0.806&&uv2.x<0.85&&rc+0.04*g>1.3)
+    {
+    float og=g;
+    g*=0.4+sin(uv2.x*1000.+3.0*cos(uv2.y*10.+10.*sin(uv2.x*8.)))*0.4;
+    col2.rgba=vec4(g*0.7+0.7,g*0.4+0.3,g*0.2+0.2, 0.0);
+    vec2 bpos=uv2*vec2(1.3,2)-vec2(og,1);
+    float fake_spec=0.04/dot(bpos,bpos);
+    fake_spec=3.*fake_spec*fake_spec+2.*fake_spec*fake_spec*fake_spec;
+    col2.rgba+=vec4(fake_spec)*0.1;
+    col2.rgba*=0.0;
+    }
+    else if (col2.rgba!=vec4(0))col2.rgba+=vec4(bumpah);
+    Rectangle += vec4(col2*(1.2/4.));  
+    }  
+}

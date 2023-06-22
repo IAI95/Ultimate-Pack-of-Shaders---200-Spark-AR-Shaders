@@ -1,0 +1,132 @@
+// Fork of "Bloody" by huwb. https://shadertoy.com/view/4sKGWw
+// 2023-03-05 10:29:04
+
+// remix of milky: https://www.shadertoy.com/view/Msy3D1
+// which is based in turn on https://www.shadertoy.com/view/Xsd3DB
+
+// turns out two sim steps per frame is important for motion to
+// get nice, fast waves and oscillation
+
+// this makes pretty terrible use of the simulation domain (comment
+// out RAYMARCH to see it) but i like how the result looks at this scale.
+// i should reduce the simulation domain size a la https://www.shadertoy.com/view/4dKGDw
+
+
+#define RAYMARCH
+#define HEIGHTMAPSCALE 99.
+#define MARCHSTEPS 8
+
+const float hscale = 4.;
+
+vec3 cam( in vec2 p, out vec3 cameraPos )
+{
+    // camera orbits around origin
+    float camRadius = 30.0;
+	float theta = -3.141592653/2.;
+    float xoff = 30.0 * cos(theta);
+    float zoff = 30.0 * sin(theta);
+    cameraPos = vec3(xoff,34.,zoff);
+     
+    // camera target
+    vec3 target = vec3(0.,0.,-27.);
+     
+    // camera frame
+    vec3 fo = normalize(target-cameraPos);
+    vec3 ri = normalize(vec3(fo.z, 0., -fo.x ));
+    vec3 up = normalize(cross(fo,ri));
+     
+    // multiplier to emulate a fov control
+    float fov = .5;
+	
+    // ray direction
+    vec3 rayDir = normalize(fo + fov*p.x*ri + fov*p.y*up);
+	
+	return rayDir;
+}
+
+
+float h( vec3 p, std::Texture2d BufferA )
+{
+    return hscale * BufferA.sample(p.xz/HEIGHTMAPSCALE + 0.5 ).x;
+}
+// boost the step size, we resort to the secant method if we overstep the surface
+float DE( vec3 p, std::Texture2d BufferA )
+{
+    return 1.2 * ( p.y - h(p, BufferA) );
+}
+
+// @param[default=#FF0000FF] Color
+
+void mainImage( in vec4 Color, in std::Texture2d BufferA, out vec4 Return )
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+    vec2 q = fragCoord.xy/iResolution.xy;
+    vec2 qq = q*2.-1.;
+    float eps = 0.1;
+    
+#ifdef RAYMARCH
+    
+    vec3 L = normalize(vec3(.3,.9,1.));
+    
+    // raymarch the milk surface
+    vec3 ro;
+    vec3 rd = cam( qq, ro );
+    float t = 0.;
+    float d = DE(ro+t*rd, BufferA);
+    
+    for( int i = 0; i < MARCHSTEPS; i++ )
+    {
+        if( abs(d) < eps )
+            break;
+        
+        float dNext = DE(ro+(t+d)*rd, BufferA);
+        
+        // detect surface crossing, if so use secant method
+        // https://www.shadertoy.com/view/Mdj3W3
+		float dNext_over_d = dNext/d;
+        if( dNext_over_d < 0.0 )
+        {
+            // estimate position of crossing
+			d /= 1.0 - dNext_over_d;
+			dNext = DE( ro+rd*(t+d), BufferA );
+        }
+        
+		t += d;
+		d = dNext;
+    }
+    
+    // hit the BLOOD
+    {
+        vec3 p = ro+t*rd;
+        
+        // finite difference normal
+        float h0 = h(p, BufferA);
+        vec2 dd = vec2(0.01,0.);
+        vec3 n = normalize(vec3( h0-h(p + dd.xyy, BufferA), dd.x, h0 - h(p + dd.yyx, BufferA) ));
+        
+        // diffuse / subtle subsurface
+        float ndotL = clamp(dot(n,L),0.,1.);
+        float dif = 1.52*(0.7+0.3*ndotL);
+        float ao = mix( 0.6, .64, smoothstep(0.,1.,(h0+1.5)/6.));
+        Return = Color*(dif)*ao;
+        
+        // specular
+        float s = .6*pow( clamp( dot( L, reflect( rd, n ) ), 0., 1. ), 4000. );
+        Return += vec4(s, 0.0, 0.0, 1.0);
+    }
+    
+	// vignette (borrowed from donfabio's Blue Spiral)
+	vec2 uv =  q.xy-0.5;
+	float distSqr = dot(uv, uv);
+	Return *= vec4(1.0 - 1.*distSqr, 1.0, 1.0, 1.0);
+    
+#else
+    float sh = 1. - BufferA.sample(q).x;
+    vec3 c = vec3(exp(pow(sh-.25,2.)*-5.), exp(pow(sh-.4,2.)*-5.), exp(pow(sh-.7,2.)*-20.));
+    Return = vec4(c,1.);
+#endif
+}
+

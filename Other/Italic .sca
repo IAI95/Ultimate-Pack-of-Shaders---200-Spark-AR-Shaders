@@ -1,0 +1,30 @@
+precision highp float;
+
+void mainImage( in std::Texture2d Texture, out vec4 Red, out vec4 Green, out vec4 Blue )
+{
+	vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+    vec2 uv = fragCoord / iResolution.xy; 
+    vec2 shift = uv;
+    float offset = shift.y * .2;
+    shift.x -= offset - .2;
+    shift.x -= mod( exp(shift.x), shift.x * .8) * .5;    
+    shift.x += offset - .1;
+    vec4 img1 = Texture.sample(shift);  
+    vec4 img2 = Texture.sample(shift); 
+    vec4 img3 = Texture.sample(shift); 
+
+    img1.bg *= uv.x * shift.x;
+    img2.rb *= uv.x * shift.x;
+    img3.gr *= uv.x * shift.x;
+
+    img1.b += uv.x * .3;
+    img2.b += uv.x * .3;
+    img3.b += uv.x * .3;
+
+    Red = vec4(img1);
+    Green = vec4(img2);
+    Blue = vec4(img3);
+}

@@ -1,0 +1,60 @@
+//     ▄██████▄     ▄████████   ▄▄▄▄███▄▄▄▄      ▄████████      ▀█████████▄   ▄██████▄  ▄██   ▄   
+//    ███    ███   ███    ███ ▄██▀▀▀███▀▀▀██▄   ███    ███        ███    ███ ███    ███ ███   ██▄ 
+//    ███    █▀    ███    ███ ███   ███   ███   ███    █▀         ███    ███ ███    ███ ███▄▄▄███ 
+//   ▄███          ███    ███ ███   ███   ███  ▄███▄▄▄           ▄███▄▄▄██▀  ███    ███ ▀▀▀▀▀▀███ 
+//  ▀▀███ ████▄  ▀███████████ ███   ███   ███ ▀▀███▀▀▀          ▀▀███▀▀▀██▄  ███    ███ ▄██   ███ 
+//    ███    ███   ███    ███ ███   ███   ███   ███    █▄         ███    ██▄ ███    ███ ███   ███ 
+//    ███    ███   ███    ███ ███   ███   ███   ███    ███        ███    ███ ███    ███ ███   ███ 
+//    ████████▀    ███    █▀   ▀█   ███   █▀    ██████████      ▄█████████▀   ▀██████▀   ▀█████▀  
+// 
+
+precision highp float;
+
+// @param[default=#9CB916FF] Color_1 
+// @param[default=#8CAA14FF] Color_2 
+// @param[default=#306430FF] Color_3 
+// @param[default=#103F10FF] Color_4 
+
+void mainImage( in vec4 Color_1, in vec4 Color_2, in vec4 Color_3, in vec4 Color_4, in std::Texture2d Texture, out vec4 Return )
+{
+
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+	vec2 uv = fragCoord.xy / iResolution.xy;
+    
+    vec4 color = vec4(0.0);
+    float alpha = 1.0;
+	
+    color = Texture.sample(uv);
+    
+    float gamma = 1.5;
+    color.r = pow(color.r,gamma);
+    color.g = pow(color.g,gamma);
+    color.b = pow(color.b,gamma);
+
+    float dist1 = length(color - Color_1);
+    float dist2 = length(color - Color_2);
+    float dist3 = length(color - Color_3);
+    float dist4 = length(color - Color_4);
+
+    float d = min(dist1,dist2);
+    d = min(d,dist3);
+    d = min(d,dist4);
+
+    if(d == dist1) {
+        color = Color_1;
+    }
+    else if(d == dist2) {
+        color = Color_2;
+    }
+    else if(d == dist3) {
+        color = Color_3;
+    }
+    else {
+        color = Color_4;
+    }
+    
+    Return = vec4(color);
+}

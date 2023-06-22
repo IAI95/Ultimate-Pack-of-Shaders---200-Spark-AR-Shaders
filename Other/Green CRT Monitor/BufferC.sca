@@ -1,0 +1,21 @@
+// created by florian berger (flockaroo) - 2016
+// License Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.
+
+// blur vertically
+
+// @param[default=16, min=1, max=30] SampNum
+
+void mainImage( in int SampNum, in std::Texture2d BufferB, out vec4 Return )
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+    Return=vec4(0);
+    for(int i=-SampNum;i<SampNum;i++)
+    {
+        vec2 c = fragCoord+vec2(0,i)*iResolution.x/500.;
+    	Return += (float(SampNum)-abs(float(i)))*BufferB.sample(c/iResolution.xy);
+    }
+    Return*=1./float(SampNum)/float(SampNum);
+}

@@ -1,0 +1,66 @@
+// created by florian berger (flockaroo) - 2016
+// License Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.
+
+// smoothing in X
+
+#define Res  std::getRenderTargetSize()
+#define Res0 std::getRenderTargetSize()
+
+vec2 TC(vec2 c)
+{
+    //all image visible on screen
+    float sc=min(Res.x/Res0.x,Res.y/Res0.y)*.95;
+    
+    //one axis of image fully visible on screen
+    //float sc=max(Res.x/Res0.x,Res.y/Res0.y);
+    
+    //compromise of the 2 above cases
+    //float sc=mix(Res.x/Res0.x,Res.y/Res0.y,.5);
+    
+    return (c-Res*.5)/sc+Res0*.5;
+}
+
+vec2 sstep(float x1, float x2, vec2 x)
+{
+    return smoothstep(x1,x2,x);
+    //return clamp((x-x1)/(x2-x1),0.,1.);
+}
+
+vec4 getVal(vec2 c, std::Texture2d Texture) 
+{
+    vec2 uv=TC(c)/Res0.xy;
+    //if(uv.x<.0 || uv.y<.0 || uv.x>1. || uv.y>1.) return vec4(.5);
+    float fade = .05;
+    vec2 s=sstep(1.-fade,1.,uv);
+    s=max(s,-(sstep(.0,fade,uv)-1.));
+    float d;
+	// edge-rounded fade out
+    d=length(max(
+            	max(uv-vec2(1.-fade),vec2(0)),
+             	max(-uv+vec2(fade),vec2(0))
+             ))/fade;
+	// strict rectangular fade out
+    d=max(s.x,s.y);
+    return mix(Texture.sample(uv), vec4(.5), clamp(d,0.,1.));
+}
+
+void mainImage( in std::Texture2d Texture, out vec4 Return )
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+    vec4 c = vec4(0);
+    float n=0.;
+#define W 2
+    for(int i=-W;i<=W;i++)
+    {
+        float fact=1.-.0*float(i)/float(W+1);
+        c+=fact*getVal(fragCoord+vec2(float(i),0)*Res.x/Res0.x, Texture);
+        n+=fact;
+    }
+    Return = c/n;
+    // no vid tex in next pass so put its size on pixel 0,0
+    if(floor(fragCoord.x)==0. && floor(fragCoord.y)==0.) Return.xy=Res0;
+    Return = getVal(fragCoord, Texture);
+}

@@ -1,0 +1,39 @@
+precision highp float;
+
+vec4 DrawTheRoad(vec2 _coords, float LineWidth, float LineSpace, float Speed, vec4 SideLineColor, vec4 LineColor, vec4 RoadColor)
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    float iTime = std::getTime();
+    float roadWidth = iResolution.x / 4.0;
+    float xLength = abs(_coords.x);
+    
+    roadWidth *= iResolution.x / iResolution.y * 3.5 + 0.25;
+    
+    if(xLength < roadWidth*0.85 && xLength > roadWidth*0.8)
+    {
+        return SideLineColor;
+    }
+    
+    if(xLength < roadWidth*LineWidth && cos((_coords.y + iTime * floor(Speed)) / 50.0) > LineSpace)
+    {
+        return LineColor;
+    }
+    
+    return RoadColor;
+}
+
+// @param[default=0.05, min=0.01, max=0.1] LineWidth
+// @param[default=0.0, min=-1.0, max=1.0] LineSpace
+// @param[default=200.0, min=0.0, max=1000.0] Speed
+// @param[default=#FFFFFFFF] SideLineColor
+// @param[default=#FFFFFFFF] LineColor
+// @param[default=#000000FF] RoadColor
+
+void mainImage( in float LineSpace, in float LineWidth, in float Speed, in vec4 SideLineColor, in vec4 LineColor, in vec4 RoadColor, out vec4 Return )
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+
+	vec2 newCoords = (1400.0 * fragCoord - 700.0 * iResolution) / iResolution.y;
+	Return = DrawTheRoad(newCoords, LineWidth, LineSpace, Speed, SideLineColor, LineColor, RoadColor);
+}

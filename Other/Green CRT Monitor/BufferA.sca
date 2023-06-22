@@ -1,0 +1,62 @@
+// created by florian berger (flockaroo) - 2016
+// License Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.
+
+// crt lines
+
+#define PI2 6.28318530717959
+
+#define Res vec2(std::getRenderTargetSize().xy)
+
+float fermi(float x)
+{
+    return 1./(1.+exp(x));
+}
+
+void mainImage( in std::Texture2d Texture, in std::Texture2d tex16, in std::Texture2d BufferA, out vec4 Return )
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+    float offTime=5000000.;
+    float offdt=iTime-offTime;
+    float s=iResolution.x*0.013;
+    s*=fermi(offdt/0.07)+0.7*exp(-offdt*offdt/0.1/0.1);
+    vec2 c=iResolution.xy*0.5;
+    float l1=9.0;
+    float l2=3.0;
+    float l3=7.0;
+    vec4 col=vec4(0.0);
+    vec2 coord = (fragCoord-c);
+    coord+=dot(coord,coord)*coord*vec2(1.5,.6)/iResolution.y/iResolution.y*0.9;
+    coord*=vec2(.8,.9);
+    coord+=c;
+    float coordOffX=0.0;
+    vec2 scrRes=vec2(360,180)*sqrt(Res.y/1080.);
+    //coord+=vec2(coordOffX,0);
+    vec2 coordQ=vec2(coord.x,floor(coord.y/Res.y*scrRes.y)*Res.y/scrRes.y);
+    coordOffX+=.7*sin(iTime*40.0+70.0*(coordQ.y)/Res.x)*Res.x*0.002;
+    coordOffX-=1.*sin(iTime*60.0+800.0*(coordQ.y)/Res.x)*Res.x*0.002;
+    coordQ+=vec2(coordOffX,0);
+    col=mix(Texture.sample(coordQ/iResolution.xy),
+            tex16.sample(coordQ/std::getRenderTargetSize().xy*.3+iTime*vec2(13.,17)),
+            .1);
+	col=vec4(0,dot(col,vec4(1.,0,0,0)),0,1);
+    col+=vec4(0.1);
+    // pixel mask
+    //col.xyz=maskRGBGrid(col.xyz,coord,scrRes);
+    // cathod ray mask
+    float rmask=clamp(1.0*(0.5+0.5*sin(PI2*scrRes.y*coord.y/iResolution.y)),0.0,1.0);
+    col*=pow(rmask,.7);
+    // time-mask
+    float ferm=fermi(offdt/0.07);
+    float d=length(coord-c);
+    col+=0.04*mix(sin(iTime*300.0),1.0,(1.0-ferm));
+    if(coord.x<Res.x*0.05) col=vec4(0);
+    if(coord.y<Res.y*0.05) col=vec4(0);
+    if(coord.x>Res.x*0.95) col=vec4(0);
+    if(coord.y>Res.y*0.95) col=vec4(0);
+    col=col.y*vec4(0,1.3,.2,1)+vec4(1,.5,1,1)*col.y*col.y;
+    // afterglow
+    Return = col*.3+.7*BufferA.sample(fragCoord/iResolution.xy);
+}

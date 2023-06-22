@@ -1,0 +1,88 @@
+precision highp float;
+
+#define PI 3.14159265359
+#define EPSILON 1e-5
+
+float ifLessThan(float val, float compareVal) 
+{
+    return max(sign(compareVal - val), 0.0);
+}
+
+float ifGreaterThan(float val, float compareVal) 
+{
+    return max(sign(val - compareVal), 0.0);
+}
+
+// @param[default=0.2, min=0.0, max= 1.0] FoldRadius
+// @param[default=1.0, min=0.0, max= 1.0] Opacity
+
+void mainImage( in float FoldRadius, in float Opacity, in vec2 iMouse, in std::Texture2d iChannel0, out vec4 fragColor )
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+    float aspectRatio = iResolution.x / iResolution.y;
+    vec2 invAspect = vec2(1.0 / aspectRatio, 1.0);
+    vec2 uv = fragCoord / iResolution;
+    uv.x *= aspectRatio;
+
+    vec2 normalizediMouse = iMouse * vec2(aspectRatio, 1.0) / iResolution;
+    vec2 dir = normalize(iMouse + 0.1);
+    vec2 origin = normalizediMouse - dir * (normalizediMouse.x - aspectRatio * ifGreaterThan(dir.x, -EPSILON)) / (dir.x + EPSILON);
+    float curlDist = length(normalizediMouse - origin) + (1.0 / iResolution.x * aspectRatio - aspectRatio * ifLessThan(dir.x, EPSILON)) / (dir.x + EPSILON);
+
+    float proj = dot(origin - uv, dir);
+    float dist = proj - curlDist;
+    vec2 linePoint = uv + dist * dir;
+
+    vec4 outColor;
+    if (dist > FoldRadius)
+    {
+        outColor = vec4(0.0);
+    }
+    else if (dist > EPSILON)
+    {
+        float theta = asin(dist / FoldRadius);
+        vec2 p1 = linePoint - dir * theta * FoldRadius;
+        vec2 p2 = linePoint - dir * (PI - theta) * FoldRadius;
+
+        // outside curl
+        if (p2.x < (aspectRatio + EPSILON) && p2.y < (1.0 + EPSILON) && p2.x > 0.0 && p2.y > 0.0)
+        {
+            vec4 frontPage = iChannel0.sample(p1 * invAspect);
+            vec4 backPage = iChannel0.sample(p2 * invAspect);
+            float alpha = backPage.a * frontPage.a;
+            float light = smoothstep(0.0f, 1.0f, (FoldRadius - dist) / FoldRadius) * 0.3f;
+            backPage.rgb += light * backPage.a;
+            outColor = vec4(mix(frontPage.rgb, backPage.rgb, backPage.a * Opacity), max(backPage.a, frontPage.a));
+            outColor.rgb *= pow((FoldRadius - dist) / FoldRadius, 0.2);
+        }
+        // inside curl
+        else
+        {
+            outColor = iChannel0.sample(p1 * invAspect);
+            outColor.rgb *= pow((FoldRadius - dist) / FoldRadius, 0.2);
+        }
+    }
+    else
+    {
+        vec2 p = linePoint - dir * (abs(dist) + PI * FoldRadius);
+
+        // outside curl
+        if (p.x < (aspectRatio + EPSILON) && p.y < (1.0 + EPSILON) && p.x > 0.0 && p.y > 0.0)
+        {
+            vec4 frontPage = iChannel0.sample(uv * invAspect);
+            vec4 backPage = iChannel0.sample(p * invAspect);
+            float light = smoothstep(0.0f, 1.0f, (FoldRadius + dist) / FoldRadius) * 0.3f;
+            backPage.rgb += light * backPage.a;
+            outColor = vec4(mix(frontPage.rgb, backPage.rgb, backPage.a * Opacity), max(backPage.a, frontPage.a));
+        }
+        // flat surface
+        else
+        {
+            outColor = iChannel0.sample(uv * invAspect);
+        }
+    }
+    fragColor = outColor;
+}

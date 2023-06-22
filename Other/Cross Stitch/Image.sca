@@ -1,0 +1,77 @@
+// created by florian berger (flockaroo) - 2018
+// License Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.
+
+// cross stitch
+
+// mixing, lighting, ssao, color bleeding
+
+// configured for green-screen background.
+// uncomment your prefered bg in BufA from line 178 on
+
+precision highp float;
+
+#ifdef SHADEROO
+#define CrossSize floor((18.*sqrt(std::getRenderTargetSize().x/std::getRenderTargetSize().y))/(1.-.0003))
+#else
+#define CrossSize floor(18.*sqrt(std::getRenderTargetSize().x/std::getRenderTargetSize().y))
+#endif
+
+float getVal(vec2 coord, std::Texture2d BufferA)
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    return BufferA.sample(coord/iResolution.xy).w;
+}
+
+vec2 getGrad(vec2 coord, float eps, std::Texture2d BufferA)
+{
+    vec2 d=vec2(eps,0);
+    return vec2(
+        getVal(coord+d.xy, BufferA) - getVal(coord-d.xy, BufferA),
+        getVal(coord+d.yx, BufferA) - getVal(coord-d.yx, BufferA)
+        )/eps/2.;
+}
+
+vec4 getRand(vec2 coord, std::Texture2d Waste)
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 rres = iResolution;
+    return Waste.sample(coord/rres);
+}
+
+// @param[default=0.5, min=0.0, max=3.0] amb
+
+void mainImage( in float amb, in std::Texture2d BufferA, in std::Texture2d Waste, out vec4 Return )
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+    vec4 rnd = Waste.sample(fragCoord/iResolution.xy*.04);
+    vec4 rnd2 = Waste.sample(fragCoord/iResolution.xy*.08);
+    vec4 col = BufferA.sample(fragCoord/iResolution.xy);
+    // FIXME: +log(iResolution.x/600.) is not right because ao spread should be proportional 
+    // to pixel size which scales by sqrt(res) ...
+
+    vec2 kir1 = (fragCoord/iResolution.xy);//,1.+log(CrossSize/20.)/log(2.));
+    vec2 kir2 = (fragCoord/iResolution.xy);//,3.+log(CrossSize/20.)/log(2.));
+    vec4 col1 = BufferA.sample(kir1);
+    vec4 col2 = BufferA.sample(kir2);
+
+    vec3 n=normalize(vec3(-getGrad(fragCoord, .1, BufferA)-2.*getGrad(fragCoord, 2., BufferA)+.75*(rnd.xy-.5)+.3*(rnd2.xy-.5),1.5));
+    //Return.xyz=vec3(1)*col.w*mix(vec3(1,.9,.8),vec3(1),step(.7,col.x));
+    float diff = clamp(dot(n,normalize(vec3(.5,.05,1.))),0.,1.);
+    Return.xyz=mix(((col1.xyz-.5)*2.+.5)*amb,(.15*col.xyz+.55*col1.xyz+.3*col2.xyz),diff)*(.5+.5*sqrt(col.w));
+    vec2 sc = (fragCoord/iResolution.xy-.5)*2.;
+    vec2 ds = (1.0*fragCoord.xy-0.5*iResolution.xy) / iResolution.y;
+    // color bleeding
+    Return.xyz=mix(Return.xyz,col2.xyz,.2);
+    // ssao
+    Return.xyz*=vec3(clamp(1.-(.75*(col2.w-col1.w)-.25*(col1.w-col.w))*.2,0.,1.));
+    //Return.xyz=pow(Return.xyz,vec3(.8));
+    Return.xyz*=(1.-1.5*dot(ds,ds))*1.1
+    *(1.-smoothstep(.9,1.4,abs(sc.x)))
+    *(1.-smoothstep(.9,1.4,abs(sc.y)));
+    //Return.xyz=vec3(texture(BufferA,fragCoord/iResolution.xy).w);
+    Return.w=1.;
+}
+

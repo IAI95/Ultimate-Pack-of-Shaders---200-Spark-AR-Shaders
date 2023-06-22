@@ -1,0 +1,31 @@
+// Created by David Gallardo - xjorma/2020
+// License Creative Commons Attribution-NonCommercial-ShareAlike 3.0
+
+precision highp float;
+
+#define TAU radians(360.)
+
+// @param[default=0.1, min=0.0, max=1.0] CircleSpeed
+// @param[default=20.0, min=0.0, max=50.0] CircleLength
+
+void mainImage( in float CircleSpeed, in float CircleLength, in std::Texture2d BufferC, out vec4 Return )
+{
+
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+    vec4 	tex = BufferC.sample(fragCoord.xy / iResolution.xy);
+	vec2	p = (2. * fragCoord - iResolution.xy) / iResolution.y;
+    float	angle = atan(p.y, p.x);
+    float 	l = length(p) * CircleLength;
+    float	circleId = floor(l);
+    float	modCircleId = mod(circleId, 2.);
+    float 	d = tex.x;
+    float speed = mix(CircleSpeed, -CircleSpeed, modCircleId);
+    l+= sin((angle - iTime * speed) * circleId * 5.) * 0.3 * d;
+    l = fract(l) * 2.;
+    float	t = min(l, 2. - l);
+    t = smoothstep((100. + 100. * tex.y) / iResolution.y, 0., abs(t-1.)); 
+    Return = vec4(vec3(pow(t,1./2.2)),1.);
+}

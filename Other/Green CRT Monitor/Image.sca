@@ -1,0 +1,41 @@
+// created by florian berger (flockaroo) - 2016
+// License Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.
+
+// glass + final mix
+
+float rectMask(float b, float w, vec2 uv)
+{
+	vec4 e=smoothstep(vec4(-b-.5*w),vec4(-b+.5*w),vec4(uv,vec2(1)-uv));
+    return e.x*e.y*e.z*e.w;
+}
+
+void mainImage( in std::Texture2d BufferA, in std::Texture2d BufferC, in std::TextureEnv Texture3D, in std::Texture2d tex11, out vec4 Return )
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+    fragCoord+=iResolution.y*.003*vec2(sin(iTime*.6667*3.),2.*cos(iTime*.5*3.));
+    vec2 uv=(fragCoord/iResolution.xy-.5)*1.05+.5;
+    vec4 c0=BufferA.sample(uv);
+    vec4 c1=BufferC.sample((uv-.5)*.97+.5);
+    vec2 coord = fragCoord-iResolution.xy*.5;
+    vec3 v=normalize(vec3(coord/iResolution.x*.25,-1));
+    coord+=dot(coord,coord)*coord*vec2(1.5,.6)/iResolution.y/iResolution.y*0.9;
+    coord*=vec2(.8,.9)*1.1;
+    vec2 uv2=coord/iResolution.x;
+    vec2 uv3=coord/iResolution.xy*1.6;
+    vec2 uvS=uv2*1.5+uv3*pow(abs(uv3),vec2(22.))*530.*1.
+        +.1*vec2(sin(iTime*.27),cos(iTime*.31));
+    vec3 n=normalize(vec3(uvS,1.1)
+                     +.01*tex11.sample(1.*coord/iResolution.xy).xyz
+                    );
+    vec3 n2=normalize(vec3(uvS,1.13));
+    vec4 spec = Texture3D.sample(reflect(v,n).zyx*vec3(1,-1,-1));
+    spec += Texture3D.sample(reflect(v,n2).zyx*vec3(1,-1,-1));
+    spec*=.08+1.5*pow(abs(1.-n.z),4.);
+	float r=length(fragCoord-iResolution.xy*.5)/iResolution.y;
+    float vign=1.-r*r*r;
+	Return = ((c0 + c1*c1*2. + c1*1.5)*.3+spec/*vec4(.5*n+.5,0)*/)*vign;
+    //Return*=rectMask(30.,30.,uvS*.5+.5);
+}

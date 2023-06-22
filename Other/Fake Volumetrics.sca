@@ -1,0 +1,43 @@
+precision highp float;
+
+vec3 sample1(vec2 uv, std::Texture2d Texture, float Threshold)
+{
+    vec4 col = Texture.sample(uv);
+    if((col.x+col.y+col.z)/3. < Threshold) 
+	{
+        col.xyz = vec3(0.);
+    }
+//    col = clamp(col-Threshold,0.,1.);
+    return col.xyz;
+}
+
+// @param[default=125, min=0, max=512] Samples
+// @param[default=0.75, min=0.0, max=1.0] Threshold
+// @param[default=1.0, min=0.0, max=1.0] Intensity
+
+void mainImage( in int Samples, in float Threshold, in float Intensity, in vec2 ScreenPan, in std::Texture2d Texture, out vec4 Return )
+{
+	vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+	vec2 uv = fragCoord.xy / iResolution.xy;
+	Return = Texture.sample(uv);
+    
+    vec2 center = vec2(.25+.25*cos(iTime*1.5),.75+.15*sin(iTime));
+
+    center = ScreenPan.xy/iResolution.xy;
+
+    vec3 sum 	 = vec3(0.);
+    float weight = 1. / float(Samples);
+    for(int i = 0; i < Samples; i++) 
+	{
+        sum += sample1(uv, Texture, Threshold);
+        
+        vec2 dir = center-uv;
+        uv += dir * .01;
+    }
+    
+    Return.xyz += sum * weight * Intensity;
+    Return.w    = 1.;
+}

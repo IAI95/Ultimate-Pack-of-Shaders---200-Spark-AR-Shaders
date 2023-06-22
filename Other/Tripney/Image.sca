@@ -1,0 +1,256 @@
+// created by florian berger (flockaroo) - 2017
+// License Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.
+
+// halftone experiment + outlines + shading towards the edges
+// basically an improved version of https://www.shadertoy.com/view/4ssyz4 using my
+// pattern from https://www.shadertoy.com/view/lssfzX, and added some outline shading 
+// inspired by shanes https://www.shadertoy.com/view/ldscWH
+//
+// BufA and BufB are only for blurring the image, so that the edges dont get too noisy
+
+// uncomment those if you want a slight chrome look, engrave of pattern,
+// brushed metal style, or a moving halftone pattern
+#define REFLECTION
+//#define ENGRAVE
+//#define BRUSHED
+//#define MOVE_PATTERN
+
+#define Res  std::getRenderTargetSize()
+#define Res1 std::getRenderTargetSize()
+#define PI 3.14159265358979
+
+vec2 tr_i(vec2 p)
+{
+    return (p*vec2(1,.5*sqrt(3.))+vec2(.5*p.y,0));
+}
+
+vec2 tr(vec2 p)
+{
+    return (p-vec2(p.y/sqrt(3.),0))/vec2(1,.5*sqrt(3.));
+}
+
+void getTri(vec2 p, inout vec2 p1, inout vec2 p2, inout vec2 p3, float size)
+{
+    vec2 pt=tr(p)/size;
+    vec2 pf=floor(pt);
+    vec2 pc=ceil(pt);
+    p1=vec2(pf.x,pc.y);
+    p2=vec2(pc.x,pf.y);
+    p3=pc;
+    if(dot(pt-pf,vec2(1))<1.) p3=pf;
+    p1=tr_i(p1)*size;
+    p2=tr_i(p2)*size;
+    p3=tr_i(p3)*size;
+}
+
+float tri01(float x)
+{
+    return abs(fract(x)-.5)*2.;
+}
+
+vec4 getRand(vec2 pos, std::Texture2d tex16)
+{
+    return tex16.sample(pos/Res1);
+}
+
+// emulated nearest sampling
+vec4 getRandN(vec2 p, std::Texture2d tex16)
+{
+    vec2 kir = std::getRenderTargetSize();
+
+    vec2 texc=(floor(p)+.5)/kir;
+    return tex16.sample(texc);
+}
+
+// truchet-ish spirally pattern (see https://www.shadertoy.com/view/lssfzX)
+float dist(vec2 p, float period, float size, std::Texture2d tex16)
+{
+    vec2 p1,p2,p3;
+    getTri(p,p1,p2,p3,size);
+    vec4 rnd=getRandN((p1+p2+p3)/2., tex16);
+	float r=rnd.x;
+	float r2=rnd.y;
+	float r3=rnd.z;
+    if(fract(r*2.)>.3333) { vec2 d=p3; p3=p2; p2=p1; p1=d; }
+    if(fract(r*2.)>.6666) { vec2 d=p3; p3=p2; p2=p1; p1=d; }
+    float d = 10000.;
+    float ang;
+    ang = acos(dot(normalize(p-p1),normalize(p3-p1)));
+    d = min(d,length(p-p1)+(floor(r2*2.)*2.-1.)*period*ang/PI*3.);
+    ang = acos(dot(normalize(p-p2),normalize(p3-p2)));
+    d = min(d,length(p-p2)+(floor(r3*2.)*2.-1.)*period*ang/PI*3.);
+    return tri01((d-.5*size)/period)*.5*period;
+}
+
+vec4 getCol(vec2 pos, std::Texture2d BufferB)
+{
+    vec2 iResolution = std::getRenderTargetSize();
+
+    return BufferB.sample(pos/iResolution.xy);
+}
+
+float getVal(vec2 pos, std::Texture2d BufferB)
+{
+    return dot(getCol(pos, BufferB).xyz,vec3(.3333));
+}
+
+// modified version of shane's sFloor (https://www.shadertoy.com/view/ldscWH), but
+// just using linear (1.-fx) smoothing also does the trick instead of fx*(1.-fx)
+// and im smoothing after the step (not before as in shane's version)
+float sFloorOld(float x, float sm){ float fx = fract(x); return x - max(fx, 1. - fx/fwidth(x)/sm); }
+
+// ... but finally chose to use some power func, to get differentiable smooth edge 
+// (gives better normals - see further below)
+// x^n has 1st moment (in the interval 0..1) of 1-1/n (so the width of the edge towards x=1 
+// is prop to 1/n), so (1-fract)^(1/smooth) should give a proper differentiable smoothing
+float sFloor(float x, float sm){ float fx = fract(x); return x - fx - pow(1.-fx,2./fwidth(x)/sm); }
+
+float quantize(float v, int num)
+{
+    return floor(v*float(num)+.5)/float(num);
+}
+
+float squantize(float v, int num, float sm)
+{
+    return sFloor(v*float(num)+.5,sm)/float(num);
+}
+
+float gauss(float x)
+{
+    return exp(-x*x);
+}
+
+// final pattern of quantized layers
+float htPattern(vec2 pos, int lnum, out vec3 n, std::Texture2d BufferB, std::Texture2d tex16)
+{
+    vec2 iResolution = std::getRenderTargetSize();
+
+    float b0=getVal(pos, BufferB);
+    float bq=quantize(b0,lnum);
+
+    float size=50./sqrt(600./iResolution.x)*(.2+.8*bq)*4.5;
+    size = max(20.,size);
+    float per = size/15.;
+    float thr = per*.5*clamp(.8-sqrt(bq),0.1,.7);
+    
+    vec2 offs = vec2(0);
+    #ifdef MOVE_PATTERN
+    offs = size * .1*vec2(cos(iTime+bq),sin(iTime+bq)*(mod(bq*float(lnum),2.)*2.-1.));
+    #endif
+    float d = dist(pos+offs,per,size, tex16);
+    float p = smoothstep(thr-per*.1,thr+per*.1,d)*1.7-.7;
+    n=vec3(0);
+    #ifdef ENGRAVE
+    n=normalize(vec3(-dFdx(d),-dFdy(d),1))*gauss((d-1.5*thr)/per/.07)*.2;
+    #endif
+    return p;
+}
+
+// simple cubemap reflection
+vec4 getReflection(vec2 fragCoord, vec3 n, std::TextureEnv Texture3D)
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    float iTime = std::getTime();
+
+    vec3 dir = normalize(vec3(0,0,-1)+1.5*vec3((fragCoord.xy-iResolution.xy*.5)/iResolution.x,0));
+    float fres=1.-clamp(dot(-dir,n),0.,1.);
+    vec3 R = reflect(dir,normalize(n*vec3(1,1,1)))*vec3(1,-1,1);
+    float c=cos(iTime*.5);
+    float s=sin(iTime*.5);
+    mat2 m=mat2(c,s,-s,c);
+    R.xz=m*R.xz;
+    //fres*=fres;
+    return Texture3D.sample(R*vec3(1,-1,1));
+}
+
+// @param[default=24, min=2, max=24] SampNum
+// @param[default=7.0, min=0.0, max=20.0] Spread
+
+void mainImage( in int SampNum, in float Spread, in std::Texture2d BufferB, in std::Texture2d tex16, in std::TextureEnv Texture3D, out vec4 Return )
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+ 
+    #define Quant (3+int(sqrt(iResolution.x/iResolution.y)*10.))
+
+	vec2 pos=fragCoord;
+	float b = quantize(getVal(pos, BufferB),Quant);
+    // smooth quantization
+	float bs  = squantize (getVal(pos, BufferB),Quant,5.);
+    float delta=2.7*sqrt(iResolution.y/iResolution.x);
+    vec2 eps=vec2(delta,0);
+    // gradient of smooth quantization (for normals)
+	vec2 bsgrad=vec2(0);
+    bsgrad.x += squantize (getVal(pos+eps.xy, BufferB),Quant,delta);
+    bsgrad.x -= squantize (getVal(pos-eps.xy, BufferB),Quant,delta);
+    bsgrad.y += squantize (getVal(pos+eps.yx, BufferB),Quant,delta);
+	bsgrad.y -= squantize (getVal(pos-eps.yx, BufferB),Quant,delta);
+	float bs3 = squantize (getVal(pos, BufferB),Quant,3.7);
+
+    // calc some ambient occlusion
+    float ao=0.;
+    float ao2=0.;
+    float spread = Spread*sqrt(Res.x/Res.y);
+    for(int i=0;i<SampNum;i++)
+    {
+        vec2 delta = tex16.sample((pos+vec2(0,123*i))/Res1).xy*2.-1.;
+	    // lets spread slightly off axis
+    	// so we get the impression of a diffuse lightsource from upper left
+        // and lets take 2 diffuse light sources
+        vec2 delta1=delta+vec2(-.5,.3)*.7;    // from upper right
+        vec2 delta2=delta+vec2(.7,.5)*.7;     // from upper left
+        
+        float b1 = quantize(getVal(pos+spread*delta1, BufferB),Quant);
+        float b2 = quantize(getVal(pos+spread*delta2, BufferB),Quant);
+        if(b1>b) ao+=(1.-length(delta1))+1.;
+        if(b2>b) ao2+=(1.-length(delta2))+1.;
+        //if(b2>b) ao+=1.;
+    }
+    ao/=float(SampNum);
+    ao2/=float(SampNum);
+
+    // 2 light colors from 2 different directions
+    vec3 col1=vec3(.5,0.,-.5)*2.+1.;
+    vec3 col2=vec3(-.5,0.,.5)*2.+1.;
+    
+    float bc = getVal(pos, BufferB);
+    float s=sin((bc*float(Quant)+.5)*PI)*.03*sqrt(1280./iResolution.y)/fwidth(bc);
+    float outline=exp(-s*s);
+    
+    vec4 rand=vec4(0);
+    #ifdef BRUSHED
+    rand=getRand(pos*vec2(1.3,.15)*.75, tex16)-.5+getRand(pos*vec2(.15,1.3)*.75, tex16)-.5;
+    #endif
+    
+    // calc pattern and normals
+    vec3 n=normalize(vec3(-1.5*bsgrad,1));
+    vec3 n2;
+	float patt = htPattern(pos,Quant,n2, BufferB, tex16);
+    n=normalize(n+vec3(rand.xy*.03,0)+vec3(n2.xy,0));
+
+    
+    Return=vec4(1.0, 1.0, 1.0, 1.0);
+    
+#ifdef REFLECTION
+    // cubemap reflection
+    Return=Return*.6+getReflection(fragCoord,n, Texture3D)*.4;
+#endif
+    
+    // apply ao and pattern
+	Return.xyz *= vec3(0)+(
+        +.45*vec3(col1)*(1.-.5*ao )
+        +.55*vec3(col2)*(1.-.5*ao2)
+                        )*(.8+.3*b)*(.6+.05*rand.x+.4*patt);
+	
+    // diffuse lighting
+    Return*=max(.9,dot(n,vec3(1,1,1)));
+    
+    // vignetting
+    vec2 c=(fragCoord.xy-.5*Res.xy)/(Res.y);
+    float vign=clamp(1.2-1.*dot(c,c),0.,1.);
+    Return*=vign;
+    
+    // slightly emphasize the outlines of the quantization layers
+    Return.xyz*=1.-.4*outline;
+}

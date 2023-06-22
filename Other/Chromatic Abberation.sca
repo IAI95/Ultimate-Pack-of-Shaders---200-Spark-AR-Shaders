@@ -1,0 +1,46 @@
+
+/////////////////////////////////////////////////////
+//
+//	 CHROMATIC ABBERATION
+//
+//	 by Tech_
+//
+//	 Pincushion Distortion (by parameterized): https://www.shadertoy.com/view/lttXD4
+//
+/////////////////////////////////////////////////////
+
+/////////////////////////////////////////////////////
+
+#define DISTORTION_AMOUNT (sin(std::getTime() * 0.8) + 1.0) / 2.0
+
+/////////////////////////////////////////////////////
+
+vec2 PincushionDistortion(in vec2 uv, float strength) 
+{
+	vec2 st = uv - 0.5;
+    float uvA = atan(st.x, st.y);
+    float uvD = dot(st, st);
+    return 0.5 + vec2(sin(uvA), cos(uvA)) * sqrt(uvD) * (1.0 - strength * uvD);
+}
+
+vec3 ChromaticAbberation(std::Texture2d Texture, in vec2 uv) 
+{
+	float rChannel = Texture.sample(PincushionDistortion(uv, 0.3 * DISTORTION_AMOUNT)).r;
+    float gChannel = Texture.sample(PincushionDistortion(uv, 0.15 * DISTORTION_AMOUNT)).g;
+    float bChannel = Texture.sample(PincushionDistortion(uv, 0.075 * DISTORTION_AMOUNT)).b;
+    vec3 retColor = vec3(rChannel, gChannel, bChannel);
+    return retColor;
+}
+
+void mainImage( in std::Texture2d Texture, out vec4 Return )
+{
+
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+    vec2 uv = fragCoord/iResolution.xy;
+    vec3 col = ChromaticAbberation(Texture, uv);
+    
+    Return = vec4(col, 1.0);
+}

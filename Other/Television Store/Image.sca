@@ -1,0 +1,297 @@
+precision highp float; 
+ 
+#import <Common.sca>
+
+float squash_squircle(in vec2 in_pos, in float aspect_ratio, in float rad4) 
+{
+    vec2 iResolution = std::getRenderTargetSize();
+
+    vec2 aspect = vec2(aspect_ratio, 1.0);
+    vec2 pos = aspect * in_pos;
+    vec2 tmp = pos * pos;
+    vec2 deriv = 4.0 * pos * tmp;
+    tmp = tmp * tmp;
+    float val4 = dot(vec2(1.0, 1.0), tmp);
+    float deriv_mag = length(aspect * deriv);
+    float sdf = (val4 - rad4) / deriv_mag;
+    return 1.0 - clamp(0.5 * sdf * iResolution.y, 0.0, 1.0);
+}
+
+vec3 color_shift(in vec3 rgb, in float how_much) 
+{
+    float iTime = std::getTime();
+    
+    const mat3 to_yuvish = mat3(0.299, -0.14713, 0.615,
+                          0.587, -0.28886, -0.51499,
+                          0.114, 0.436, -0.10001);
+    const mat3 from_yuvish = mat3(1.0, 1.0, 1.0,
+                            0.0, -0.39465, 2.03211,
+                            1.13983, -0.58060, 0.0);
+
+    vec3 yuv = to_yuvish * rgb;
+    yuv += 0.3 * vec3(0.0, how_much * cos(how_much + iTime), how_much * sin(how_much + iTime));
+    yuv = clamp(yuv, vec3(0.0), vec3(1.0));
+    vec3 rgb_out = from_yuvish * yuv;
+    return smoothstep(vec3(0.0), vec3(1.0), rgb_out);
+}
+
+vec3 perturb(in vec3 pt) 
+{
+    float iTime = std::getTime();
+
+    return pt + 0.1 * sin(4.0 * pt.x + 8.0 * iTime) * vec3(0.0, 1.0, 0.0);
+}
+
+
+vec3 vehicle_sdf_grad(in vec3 loc) 
+{
+    float dist = vehicle_sdf(perturb(loc));
+    const float del = 0.01;
+    return vec3(vehicle_sdf(perturb(loc + vec3(del, 0.0, 0.0))) - dist,
+                vehicle_sdf(perturb(loc + vec3(0.0, del, 0.0))) - dist,
+                vehicle_sdf(perturb(loc + vec3(0.0, 0.0, del))) - dist) / del;
+}
+
+
+float cast_to_vehicle(in vec3 orig, in vec3 dir) 
+{
+    vec3 p = orig;
+    float accum = 0.0;
+    for (int i = 0; i < 256; ++i) {
+    	float remaining = 0.7 * vehicle_sdf(p);
+        accum += remaining;
+        p = orig + accum * dir;
+        p = perturb(p);
+        if (remaining < 1.0e-3 || accum > MAX_DIST) 
+        {
+            return accum;
+        }
+    }
+	return max(accum, MAX_DIST + 1.0);
+}
+
+vec3 get_bounce(in vec3 pt, in vec3 dir) 
+{
+    vec3 norm = normalize(vehicle_sdf_grad(pt));
+    return normalize(reflect(dir, norm));
+}
+
+vec4 castRay(in vec2 tv_coord) 
+{
+    float iTime = std::getTime();
+
+	vec2 uv = 5.0 * tv_coord - vec2(2.5);
+    vec3 ray_orig = vec3(0.0, 0.5, -7.0);
+	vec3 ray_dir = normalize(vec3(uv, 5.0));
+    
+    float wiggle = abs(mod(0.2 * iTime, 4.0) - 2.0) - 1.0;
+    wiggle = sign(wiggle) * smoothstep(0.0, 1.0, abs(wiggle));
+    float ct = sin(wiggle);
+    float st = cos(wiggle);
+    mat3 twist = mat3(ct, 0.0, st,
+                      0.0, 1.0, 0.0,
+                      -st, 0.0, ct);
+    ray_dir = twist * ray_dir;
+    ray_orig = twist * ray_orig;
+    
+    float d = MAX_DIST;
+    
+    if (abs(uv.y) < 1.0 && abs(uv.x) < 1.2) 
+    {
+	    d = cast_to_vehicle(ray_orig, ray_dir);
+    }
+    if (d < MAX_DIST) 
+    {
+        vec3 pt = ray_orig + d * ray_dir;
+        ray_dir = get_bounce(pt, ray_dir);
+    }
+
+    return vec4(abs(0.5 + 0.5 * ray_dir), 1.0);
+}
+
+vec4 spaceship(in vec2 tv_coord, in vec2 tv_uv_size) 
+{
+    vec2 iResolution = std::getRenderTargetSize();
+
+    vec2 pix_scale = tv_uv_size * 2.0 / iResolution.y;
+    vec4 outcolor = 0.25 * castRay(tv_coord + pix_scale * vec2(0.49, -0.47));
+    outcolor += 0.25 * castRay(tv_coord + pix_scale * vec2(0.5, 0.4));
+    outcolor += 0.25 * castRay(tv_coord + pix_scale * vec2(-0.35, 0.48));
+    outcolor += 0.25 * castRay(tv_coord + pix_scale * vec2(-0.48, -0.49));
+    return outcolor;
+}
+
+vec4 castRayUFO(in vec2 tv_coord, in float offset_t) 
+{
+    float iTime = std::getTime();
+
+	vec2 uv = 5.0 * tv_coord - vec2(2.5);
+    vec3 ray_orig = vec3(0.0, 0.5, -7.0);
+	vec3 ray_dir = normalize(vec3(uv, 15.0));
+    
+    float wiggle = abs(mod(0.2 * iTime + 0.1 * offset_t, 4.0) - 2.0) - 1.0;
+    wiggle = sign(wiggle) * smoothstep(0.0, 1.0, abs(wiggle));
+    float ct = sin(wiggle);
+    float st = cos(wiggle);
+    mat3 twist = mat3(ct, 0.0, st,
+                      0.0, 1.0, 0.0,
+                      -st, 0.0, ct);
+    ray_dir = twist * ray_dir;
+    ray_orig = twist * ray_orig;
+    wiggle = 0.1 * sin(iTime + offset_t);
+    ct = cos(wiggle);st = sin(wiggle);
+    twist = mat3(ct, st, 0.0,
+                 -st, ct, 0.0,
+                 0.0, 0.0, 1.0);
+    ray_dir = twist * ray_dir;
+    
+    ray_orig = ray_orig - vec3(0.0, 0.2, 0.0) -
+        sin(vec3(4.2, 1.2, 3.4) * (offset_t + iTime)) * vec3(0.5, 0.1, 0.2);
+    float closeness = MAX_DIST;
+    float d = cast_to_vehicle2(ray_orig, ray_dir, closeness);
+    
+    if (d < MAX_DIST) 
+    {
+        vec3 pt = ray_orig + d * ray_dir;
+        ray_dir = get_bounce2(pt, ray_dir);
+        // return vec4(abs(0.5 + 0.5 * ray_dir), 1.0);
+       // return vec4(0.0);
+    }
+
+    return vec4(vec3(0.1, 0.3, 1.0) + 0.8 * dot(ray_dir, vec3(0.48, 0.36, -0.8)) + 0.25 * vec3(1.0,0.7, -0.2) * smoothstep(0.5, 0.0, closeness) + 0.5 * vec3(1.0,0.7, -0.2) * smoothstep(0.15, 0.0, closeness), 1.0);
+}
+
+
+vec4 UFO(in vec2 tv_coord, in vec2 tv_uv_size, in float offset_t) 
+{
+    vec2 iResolution = std::getRenderTargetSize();
+
+    vec2 pix_scale = tv_uv_size * 2.0 / iResolution.y;
+    vec4 outcolor = 0.25 * castRayUFO(tv_coord + pix_scale * vec2(0.49, -0.47), offset_t);
+    outcolor += 0.25 * castRayUFO(tv_coord + pix_scale * vec2(0.5, 0.4), offset_t);
+    outcolor += 0.25 * castRayUFO(tv_coord + pix_scale * vec2(-0.35, 0.48), offset_t);
+    outcolor += 0.25 * castRayUFO(tv_coord + pix_scale * vec2(-0.48, -0.49), offset_t);
+    // return vec4(1.0, 0.0, 0.0, 1.0);
+    return outcolor;
+}
+
+vec4 color_from(in vec2 in_uv, in vec2 delta, in int i, std::Texture2d BufferA, std::Texture2d BufferB) 
+{
+    float iTime = std::getTime();
+
+    vec2 uv = in_uv - vec2(0.5);
+    uv = uv * (1.0 - 0.2 * smoothstep(0.25, 0.0, dot(uv, uv)));
+    uv = uv + vec2(0.5);
+    float float_i = float(i);
+    float t_wave = 2.0 * smoothstep(0.0, 4.0, mod(iTime * (1.0 + 0.01 * float_i), 4.0)) - 0.5;
+    float smooth_t_wave = smoothstep(0.75, 0.0, abs(t_wave - 0.5));
+    
+    int switch_i = (int(mod(float(i), float(10))));
+    float spike = smoothstep(0.15, 0.0, abs(in_uv.y - t_wave));
+    
+
+    switch (switch_i) 
+    {
+        case 0:
+        return BufferA.sample(0.5 * uv + vec2(0.5));
+        case 1:
+        vec3 col = BufferA.sample(0.5 * uv + vec2(0.0, 0.5)).rgb;
+        const mat3 blowout = mat3(6.62337, 6.13667, 6.25027,
+                        6.13667, 6.36245, 7.10737,
+                        6.25027, 7.10737, 8.68193);
+    	const vec3 cent = vec3(0.47968451, 
+                     0.450743, 
+                     0.45227517);
+    
+        col = col - cent;
+		return vec4(cent + (0.7 * col + 0.3 * blowout * col), 1.0);  
+        case 2:
+        return BufferA.sample(0.5 * uv + vec2(0.5, 0.0));
+        case 3:
+        return BufferA.sample(0.5 * uv + vec2(0.0));
+        case 4:
+        return vec4(uv, smooth_t_wave, 1.0);
+        case 5:
+        return spaceship(uv, delta);
+        case 6:
+        return vec4(0.3 * spike, 0.1, 1.0, 1.0);
+        case 7:
+        float mask = smoothstep(0.5, 0.7, BufferA.sample(0.5 * uv + vec2(0.5, 0.0)).g);
+        return vec4(color_shift(mask * BufferA.sample((0.5 * uv + vec2(0.5)) + 0.2 * vec2(spike, 0.0)).rgb, spike), 1.0);
+        case 8:
+        return UFO(uv, delta, float_i);
+        default:
+        
+        return vec4(color_shift(sin(vec3(0.9, 1.1, 0.7) * iTime + 1.0 * smooth_t_wave + vec3(1.0, 2.0, 3.0)), spike), 1.0) + BufferB.sample(uv);
+    }
+}
+
+vec4 add_screen(in vec2 uv, in vec2 uv_min, in vec2 uv_max, in vec4 old_color, in int i, std::Texture2d BufferA, std::Texture2d BufferB) 
+{
+    vec2 delta = (uv_max - uv_min);
+    vec2 midpoint = 0.5 * (uv_max + uv_min);
+    float aspect = abs(delta.y / delta.x);
+    float rad = 0.4 * abs(delta.y);
+  	float rad2 = rad * rad;
+    float rad4 = rad2 * rad2;
+    float outer_rad = rad + 0.05 * delta.y;
+	//    float outer_aspect  = (rad * aspect + 0.05 * delta.y) / (rad + 0.05 * delta.y);
+    float outer_rad2 = outer_rad * outer_rad;
+    float outer_rad4 = outer_rad2 * outer_rad2;
+    float inside = squash_squircle(uv - midpoint, aspect, rad4); // abs(delta.x/delta.y), 0.01 * abs(delta.y));
+    float in_border = squash_squircle(uv - midpoint, aspect, outer_rad4);
+    vec4 color = color_from( (uv - uv_min ) / delta, delta, i, BufferA, BufferB);
+    color = mix(vec4(vec3(0.0), 1.0), color, inside);
+    return mix(old_color, color, in_border);
+}
+
+vec2 subdivide(in vec2 uv, in vec2 split, inout vec2 uv_min, inout vec2 uv_max, inout int i) 
+{
+    vec2 delta = uv_max - uv_min;
+    vec2 local_split = uv_min + 0.5 * (1.0 + split) * delta;
+    vec2 out_sign = vec2(1.0);
+    if (uv.x > local_split.x) {
+        uv_min.x = local_split.x;
+    } else {
+        uv_max.x = local_split.x;
+        i = i + 1;
+        out_sign.y *= -1.0;
+    }
+    
+    if (uv.y > local_split.y) {
+        uv_min.y = local_split.y;
+        out_sign.x *= -1.0;
+    } else {
+        uv_max.y = local_split.y;
+        i = i + 2;
+    }
+    return out_sign;
+}
+
+void mainImage( in std::Texture2d BufferA, in std::Texture2d BufferB, out vec4 fragColor )
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+    // Normalized pixel coordinates (from 0 to 1)
+    vec2 uv = (2.0 * fragCoord - iResolution.xy) / iResolution.y;
+
+    // Time varying pixel color
+    vec4 col = vec4(vec3(0.2), 1.0);
+
+    vec2 uv_min = -iResolution.xy / iResolution.y;
+    vec2 uv_max = iResolution.xy / iResolution.y;
+    int i = 0;
+    
+    vec2 s = subdivide(uv, vec2(0.1, -0.2), uv_min, uv_max, i);
+    i *= 4;
+    s = subdivide(uv, s * vec2(-0.1, 0.2), uv_min, uv_max, i);
+    i *= 4;
+    s = subdivide(uv, s * vec2(-0.2, -0.1), uv_min, uv_max, i);
+    // i = i & 7;
+    // Output to screen
+    fragColor = add_screen(uv, uv_min, uv_max, col, i, BufferA, BufferB);
+//    fragColor = vec4(0.5 + 0.5 * uv_min, 0.5 + 0.5 * uv_max.x, 1.0);
+
+}
