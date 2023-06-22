@@ -1,0 +1,38 @@
+precision highp float;
+
+mat2 rotate(float a)
+{
+    float s = sin(a);
+    float c = cos(a);
+    return mat2(c,-s,s,c);
+}
+
+vec2 twirl(vec2 uv, vec2 center, float range, float Strength)
+{
+    float d = distance(uv,center);
+    uv -=center;
+    // d = clamp(0.,Strength,-Strength/range * d + Strength);
+    d = smoothstep(0.,range,range-d) * Strength;
+    uv *= rotate(d);
+    uv+=center;
+    return uv;
+}
+
+// @param[default=0.5, min=0.0, max=1.0] Range
+// @param[default=2.0, min= -5.0, max=5.0] Strength
+// @param[default=2.0, min=0.0, max=5.0] Speed
+
+void mainImage( in float Range, in float Strength, in float Speed, in std::Texture2d Texture, out vec4 Return )
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+    
+    vec2 uv = fragCoord / iResolution.xy;
+    // vec2 pos = iMouse.xy / iResolution.xy;
+    vec2 pos = vec2(.5);
+    float cTime = Strength *sin(iTime * Speed);
+    uv = twirl(uv, pos, Range,cTime);
+    vec4 color = Texture.sample(uv).rgba;
+    Return.rgba = color;
+} 

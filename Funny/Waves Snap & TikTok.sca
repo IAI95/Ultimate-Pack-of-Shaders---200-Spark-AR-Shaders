@@ -1,0 +1,24 @@
+//This can be used in Lens Studio : https://ar.snap.com/
+// twitter  : https://twitter.com/Fahad_en
+// snapchat  : https://www.snapchat.com/add/fahad.en
+// Example :https://lens.snapchat.com/27f63b3a5ef4417fbf3b6f3822c21676
+// its only slightly modified to make it much more funny
+
+precision highp float;
+
+// @param[default=0.1, min=0.0, max=0.5] Intensity
+// @param[default=7.0, min=1.0, max=15.0] Speed
+// @param[default=0.001, min=0.001, max=0.00001] WaveNumber
+
+void mainImage( in float Intensity, in float Speed, in float WaveNumber, in std::Texture2d Texture, out vec4 Return )
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+    vec2 uv = fragCoord.xy / iResolution.xy;
+    float rowOffsetMagnitude = sin(iTime * Speed) * Intensity;
+    float row = floor(uv.y / WaveNumber);
+    uv.x +=  sin(row/100.0)*rowOffsetMagnitude;
+    Return = Texture.sample(uv);
+}

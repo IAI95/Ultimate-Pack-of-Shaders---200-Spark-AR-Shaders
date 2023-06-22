@@ -1,0 +1,39 @@
+precision highp float;
+
+vec2 alterPosition (vec2 pos, vec2 mouse, float Strength)
+{
+    // pinch
+    if (true)
+	{
+        pos -= mouse;
+        
+        float len = Strength*length(pos);
+        float s = 2.0*(1.0-len)*(1.0-len)*(1.0-len) + 1.0;
+        s = max(s,1.0);
+        
+        return pos*s + mouse;
+    }
+}
+
+vec4 alterPixel (vec4 pixel, vec2 mouse)
+{
+    return pixel;
+}
+
+// @param[default=2.0, min=1.0, max=5.0] Strength
+
+void mainImage( in float Strength, in vec2 ScreenPan_2D_Offset, in std::Texture2d Texture, out vec4 Return )
+{
+	vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+
+    ScreenPan_2D_Offset = ScreenPan_2D_Offset + iResolution / 2.0;
+
+    vec2 mouse = ScreenPan_2D_Offset.xy / iResolution.xy;
+	vec2 pos = fragCoord.xy / iResolution.xy;
+    
+    pos = alterPosition(pos, mouse, Strength);
+    vec4 c = Texture.sample(pos);
+     
+	Return = alterPixel(c, mouse);
+}

@@ -1,0 +1,31 @@
+precision highp float;
+
+// linear interpolation
+vec2 getLinearInterpolationResult(vec2 ScreenPan_2D_Offset, vec2 center, float dist, float Radius, float Degree)
+{
+    vec2 direction = normalize(ScreenPan_2D_Offset - center);
+    dist = (dist / Radius) * dist + (1.0 - dist / Radius) * Degree * sqrt(dist);
+    return center + dist * direction;
+}
+
+// @param[default=400.0, min=100.0, max=1000.0] Radius
+// @param[default=1.2, min=0.0, max=20.0] Degree
+
+void mainImage( in float Radius, in float Degree, in vec2 ScreenPan_2D_Offset, in std::Texture2d Texture, out vec4 Return )
+{
+
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+    ScreenPan_2D_Offset = ScreenPan_2D_Offset + iResolution / 2.0;
+
+    float dist = distance(ScreenPan_2D_Offset.xy, fragCoord);
+    
+    if (dist < Radius) {
+        fragCoord = getLinearInterpolationResult(fragCoord, ScreenPan_2D_Offset.xy, dist, Radius, Degree);
+    }
+
+    // Output to screen
+    Return = Texture.sample(fragCoord / iResolution.xy);
+}

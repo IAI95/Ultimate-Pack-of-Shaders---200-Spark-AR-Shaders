@@ -1,0 +1,58 @@
+precision highp float;
+
+const float PI = 3.1415926535;
+const float TWO_PI = PI*2.0;
+
+float random(float seed)
+{
+    return fract(mod(sin(dot(seed, 12.9898)), TWO_PI)*43758.5453);
+}
+float random(vec2 seed)
+{
+    return fract(mod(sin(dot(seed, vec2(12.9898, 78.233))), TWO_PI)*43758.5453);
+}
+vec2 random2(vec2 seed)
+{
+    float r = random(seed);
+    return vec2(r, random(r));
+}
+
+// @param[default=3.5, min=1.0, max=6.0] Cell_Count
+// @param[default=0.003, min=0.0, max=0.01] Child_Cell_Border_Thickness
+
+void mainImage( in float Cell_Count, in float Child_Cell_Border_Thickness, in std::Texture2d Texture, out vec4 Return )
+{
+
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+
+    float CHILD_Cell_Count = Cell_Count*2.0;
+    vec2 uv = fragCoord.xy/iResolution.xy;
+   
+    vec2 scaled_uv = uv*Cell_Count;
+    
+    vec2 cell_index = floor(scaled_uv);
+    vec2 cell_uv    = fract(scaled_uv);
+    vec2 cell_id = random2(cell_index);
+    
+    vec2 boundary = (sin(cell_id*TWO_PI+iTime)*0.5+0.5)*0.5+0.25;
+    vec2 is_out_of_boundary = step(boundary, cell_uv);
+    
+    vec2 childcell_index = cell_index*2.0+is_out_of_boundary;
+    vec2 childcell_uv = mix(cell_uv/boundary, (cell_uv-boundary)/(1.0-boundary), is_out_of_boundary);
+    vec2 childcell_size = mix(boundary, 1.0-boundary, is_out_of_boundary)/CHILD_Cell_Count;
+    vec2 childcell_border = Child_Cell_Border_Thickness/childcell_size;
+    childcell_border.x *= iResolution.y/iResolution.x;
+    
+    vec2 texture_uv = (childcell_index+childcell_uv)/CHILD_Cell_Count;  
+    
+    vec3 color = vec3(Texture.sample(texture_uv));
+    color *= step(childcell_border.x, childcell_uv.x)*step(childcell_border.y, childcell_uv.y);
+    
+    // Visualizing childcell_uv
+    color *= 1.0;
+    
+    Return = vec4(color, 1.0);
+}

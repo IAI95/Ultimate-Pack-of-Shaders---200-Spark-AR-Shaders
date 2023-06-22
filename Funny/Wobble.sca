@@ -1,0 +1,25 @@
+precision highp float;
+
+#define tau   6.283185307179586476925286766559
+
+// @param[default=0.05, min=0.0, max=0.1] WobbleAmount_x
+// @param[default=0.075, min=0.0, max=0.1] WobbleAmount_y
+// @param[default=8.0, min=0.0, max=15.0] Frequency_x
+// @param[default=1.0, min=0.0, max=15.0] Frequency_y
+
+void mainImage( in float WobbleAmount_x, in float WobbleAmount_y, in float Frequency_x, in float Frequency_y, in std::Texture2d Texture, out vec4 Return )
+{
+  vec2 iResolution = std::getRenderTargetSize();
+  vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+  float iTime = std::getTime();
+
+  // Normalizing Fragment Coordinate to 0-1
+  vec2 uv = fragCoord / iResolution.xy;
+  // Calculating The Offset of x,y
+  float xOffset = sin(sin(uv.y * Frequency_x + iTime * tau * 2.0)) * WobbleAmount_x;
+  float yOffset = sin(sin(uv.x * Frequency_y + iTime * tau * 2.0)) * WobbleAmount_y;
+  vec2 offset = vec2(xOffset, yOffset);
+  //Outputting the color to fragment color
+  vec4 color = Texture.sample(uv + offset);
+  Return = color;
+}

@@ -1,0 +1,29 @@
+precision highp float;
+
+// @param[default=0.5, min=0.0, max=2.0] Amplitude
+// @param[default=2.0, min=0.0, max=10.0] WaveNumber
+// @param[default=6.0, min=0.0, max=15.0] Speed
+// @param[default=5.0, min=1.0, max=10.0] WaveLength
+
+#define PI 3.141592653589793238
+
+void mainImage( in float Amplitude, in float WaveNumber, in float Speed, in float WaveLength, in std::Texture2d Texture, out vec4 X, out vec4 Y )
+{
+
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+    
+    vec2 uvx = fragCoord/iResolution.xy;
+    vec2 uvy = fragCoord/iResolution.xy;
+    float initialPhase = Speed * iTime;
+    
+    float x = Amplitude * sin((2.0 * PI * WaveNumber * uvx.x) + initialPhase);
+    float y = Amplitude * sin((2.0 * PI * WaveNumber * uvy.y) + initialPhase);
+
+    uvx.x += x / WaveLength;
+    uvy.x += y / WaveLength;
+
+    X = Texture.sample(uvx);
+    Y = Texture.sample(uvy);
+}
