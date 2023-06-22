@@ -1,0 +1,45 @@
+// created by florian berger (flockaroo) - 2016
+// License Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.
+
+// melting wax
+
+// take (interpolate) certain history-frame
+
+#define Xnum 4
+#define Ynum 4
+
+float getVal(vec2 uv, std::Texture2d BufferA)
+{
+    return length(BufferA.sample(uv).xyz);
+}
+    
+vec2 getGrad(vec2 uv,float delta, std::Texture2d BufferA)
+{
+    vec2 d=vec2(delta,0);
+    return vec2(
+        getVal(uv+d.xy, BufferA)-getVal(uv-d.xy, BufferA),
+        getVal(uv+d.yx, BufferA)-getVal(uv-d.yx, BufferA)
+    )/delta;
+}
+
+vec2 getFrameUV(vec2 uv, float frameDelay)
+{
+    vec2 uv2 = uv+vec2(mod(frameDelay,float(Xnum)),floor(frameDelay/float(Xnum)));
+    uv2/=vec2(Xnum,Ynum);
+    return uv2;
+}
+
+void mainImage( in vec2 ScreenPan, in std::Texture2d BufferA, out vec4 Return )
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+   	vec2 uv = fragCoord.xy / iResolution.xy;
+    float strength=clamp(iResolution.x/iResolution.y, 0., .99);
+    //float strength=clamp(.7+.3*cos(iTime*.5),0.,.99);
+    if(ScreenPan.x>=2.) strength=ScreenPan.x/iResolution.x;
+    float frameDelay = strength*float(Xnum*Ynum-1);
+	Return = mix(BufferA.sample(getFrameUV(uv,floor(frameDelay))), BufferA.sample(getFrameUV(uv,ceil(frameDelay))), fract(frameDelay));
+}
+

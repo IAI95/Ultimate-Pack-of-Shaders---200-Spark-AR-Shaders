@@ -1,0 +1,31 @@
+precision highp float;
+
+//#define light
+
+#define tau 6.28
+
+// @param[default=300.0, min=0.0, max= 600.0] Length
+// @param[default=6.0, min=0.0, max= 20.0] taps
+
+void mainImage( in float taps, in float Length, in std::Texture2d Texture, out vec4 Return )
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+	vec2 uv = fragCoord.xy / iResolution.xy;
+    vec4 c  = Texture.sample(uv);
+    float t = iTime;
+    float d = 0.01 + sin(t) * 0.01 + Length / iResolution.x * 0.1;
+    for(float i = 0.; i<tau;i+=tau/taps)
+    {
+        float a = i+t;
+        vec4 c2 = Texture.sample(vec2(uv.x+cos(a)*d,uv.y+sin(a)*d));
+        #ifdef light
+        	c = max(c,c2);
+        #else
+        	c = min(c,c2);
+        #endif
+    }
+	Return = c;
+}

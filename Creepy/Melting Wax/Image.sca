@@ -1,0 +1,51 @@
+// created by florian berger (flockaroo) - 2017
+// License Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.
+
+// melting wax
+
+// mouse left/right - change strength of the effect.
+// mouse up/down - change type of effect (up=diffusion, down=fluid)
+//
+// also see on shaderoo.org [https://www.shaderoo.org/?shader=6BTyk8]
+//
+// the image is distorted by simple diffusion and/or fluid algorithm 
+// (just as in 'spilled' - https://www.shadertoy.com/view/MsGSRd)
+// a frame history is built up to be able to fade the strength of the distortion
+// (go back in history to a more distorted frame)
+// without mouse interaction its always fading modes and strength in time
+
+// apply bumpyness and waxy lighting
+
+float getVal(vec2 uv, std::Texture2d BufferB)
+{
+    return length(BufferB.sample(uv).xyz);
+}
+    
+vec2 getGrad(vec2 uv,float delta, std::Texture2d BufferB)
+{
+    vec2 d=vec2(delta,0);
+    return vec2(
+        getVal(uv+d.xy, BufferB)-getVal(uv-d.xy, BufferB),
+        getVal(uv+d.yx, BufferB)-getVal(uv-d.yx, BufferB)
+    )/delta;
+}
+
+void mainImage( in std::Texture2d BufferB, out vec4 Return )
+{
+    vec2 iResolution = std::getRenderTargetSize();
+    vec2 fragCoord = fragment(floor(std::getRenderTargetSize() * std::getVertexTexCoord()));
+    float iTime = std::getTime();
+
+	vec2 uv = fragCoord.xy / iResolution.xy;
+    vec3 n = vec3(getGrad(uv,2./iResolution.y, BufferB),150.0);
+    //n *= n;
+    n=normalize(n);
+    Return = vec4(n, 1);
+    vec3 light = normalize(vec3(1,1,2));
+    float diff=clamp(dot(n,light),0.5,1.0);
+    float spec=clamp(dot(reflect(light,n),vec3(0,0,-1)),0.0,1.0);
+    spec=pow(spec,20.0);
+	Return = mix(BufferB.sample(uv),vec4(1),spec/(diff+spec));
+    Return.w = 1.;
+}
+
